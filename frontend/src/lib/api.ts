@@ -64,6 +64,7 @@ export interface LessonSegmentRender {
   visual_spec: VisualSpec;
   audio_url?: string;
   avatar_video_url?: string;
+  video_url?: string;
   captions: CaptionItem[];
   citations: Citation[];
   checkpoint_question: CheckpointQuestion;
@@ -82,6 +83,9 @@ export interface InteractionResponse {
   new_checkpoint_question?: CheckpointQuestion;
   reteach_segment?: LessonSegmentRender;
   next_segment_id?: number;
+  transcript?: string;
+  answer_text?: string;
+  audio_url?: string;
 }
 
 export interface QuizQuestion {
@@ -243,6 +247,46 @@ export const api = {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error("Failed to submit answer");
+    return res.json();
+  },
+
+  submitVoiceAnswer: async (formData: FormData): Promise<InteractionResponse> => {
+    const res = await fetch(`${API_BASE_URL}/interact/voice-answer`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) throw new Error("Failed to evaluate voice answer");
+    return res.json();
+  },
+
+  requestSimplification: async (
+    sessionId: string,
+    segmentId: number,
+    query?: string
+  ): Promise<InteractionResponse> => {
+    const res = await fetch(`${API_BASE_URL}/interact/request-simplification`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        segment_id: segmentId,
+        user_query: query || "Can you explain this more simply with another analogy?",
+      }),
+    });
+    if (!res.ok) throw new Error("Failed to request simplification");
+    return res.json();
+  },
+
+  runPythonCode: async (
+    code: string,
+    timeoutSeconds: number = 5
+  ): Promise<{ success: boolean; output?: string; stdout?: string; stderr?: string }> => {
+    const res = await fetch(`${API_BASE_URL}/sandbox/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, timeout_seconds: timeoutSeconds }),
+    });
+    if (!res.ok) throw new Error("Failed to execute code in sandbox");
     return res.json();
   },
 
