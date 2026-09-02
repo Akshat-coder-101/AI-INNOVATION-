@@ -14,6 +14,7 @@ import {
   Play, 
   Pause, 
   RotateCcw, 
+  RotateCw,
   Volume2, 
   VolumeX, 
   HelpCircle, 
@@ -27,7 +28,12 @@ import {
   Tv,
   Mic,
   MicOff,
-  Radio
+  Radio,
+  Maximize2,
+  Minimize2,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid
 } from "lucide-react";
 
 interface TeacherPlayerProps {
@@ -68,11 +74,32 @@ export default function TeacherPlayer({
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [streamedText, setStreamedText] = useState<string>("");
 
+  const [playerViewMode, setPlayerViewMode] = useState<"theater" | "split">("theater");
+  const [isTranscriptExpanded, setIsTranscriptExpanded] = useState<boolean>(false);
+  const [playbackRate, setPlaybackRate] = useState<number>(1.0);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const isSpeakingWebSpeech = useRef<boolean>(false);
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+
+  const handleRateChange = (rate: number) => {
+    setPlaybackRate(rate);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+    }
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate;
+    }
+  };
+
+  const handleSkip = (seconds: number) => {
+    const newTime = Math.max(0, Math.min(durationSec, progressSec + seconds));
+    setProgressSec(newTime);
+    if (audioRef.current) audioRef.current.currentTime = newTime;
+    if (videoRef.current) videoRef.current.currentTime = newTime;
+  };
 
   // Sync segment on prop changes
   useEffect(() => {
@@ -466,6 +493,36 @@ export default function TeacherPlayer({
           </button>
         </div>
 
+        {/* View Mode Switcher: Theater (Large Screen) vs Split View */}
+        {activeTab === "interactive" && (
+          <div className="hidden sm:flex items-center gap-1 bg-canvas-elevated p-1 rounded-md border border-border">
+            <button
+              onClick={() => setPlayerViewMode("theater")}
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                playerViewMode === "theater"
+                  ? "bg-white text-primary font-bold shadow-2xs"
+                  : "text-ink-secondary hover:text-ink-primary"
+              }`}
+              title="Large Screen Theater Mode"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Large Screen</span>
+            </button>
+            <button
+              onClick={() => setPlayerViewMode("split")}
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                playerViewMode === "split"
+                  ? "bg-white text-primary font-bold shadow-2xs"
+                  : "text-ink-secondary hover:text-ink-primary"
+              }`}
+              title="Split View (Side-by-Side)"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Split View</span>
+            </button>
+          </div>
+        )}
+
         {/* Language Switcher */}
         <div className="flex items-center gap-2">
           <Languages className="w-4 h-4 text-ink-muted" />
@@ -494,259 +551,543 @@ export default function TeacherPlayer({
 
       {/* TAB 1: AI INTERACTIVE LESSON */}
       {activeTab === "interactive" && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
-            {/* Left Pane: AI Avatar Teacher + Video + Audio + Script (5 cols) */}
-            <div className="xl:col-span-5 flex flex-col space-y-3">
-              {/* Video or Avatar Viewport */}
-              <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video flex flex-col justify-end p-4 shadow-2xs">
+        <div className="space-y-6">
+          {/* THEATER / LARGE SCREEN MODE */}
+          {playerViewMode === "theater" ? (
+            <div className="space-y-6">
+              {/* Large Screen Video Viewport */}
+              <div className="relative rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950 w-full aspect-video sm:max-h-[480px] shadow-2xl flex flex-col justify-between group transition-all">
+                {/* Media Element */}
                 {segment.video_url ? (
                   <video
                     ref={videoRef}
                     src={segment.video_url.startsWith("http") ? segment.video_url : `${apiBaseUrl}${segment.video_url}`}
-                    controls
                     playsInline
                     autoPlay={isPlaying}
                     muted={isMuted}
-                    className="absolute inset-0 w-full h-full object-contain bg-black z-0"
+                    className="absolute inset-0 w-full h-full object-contain bg-black"
+                    onTimeUpdate={() => {
+                      if (videoRef.current) setProgressSec(videoRef.current.currentTime);
+                    }}
+                    onEnded={() => {
+                      setIsPlaying(false);
+                      setIsPausedForCheckpoint(true);
+                    }}
                   />
                 ) : segment.avatar_video_url ? (
                   <video
                     ref={videoRef}
                     src={segment.avatar_video_url}
                     playsInline
-                    autoPlay
+                    autoPlay={isPlaying}
                     muted={isMuted}
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="absolute inset-0 flex items-center justify-center bg-neutral-900">
-                    <div className="relative flex flex-col items-center">
-                      <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full border-3 overflow-hidden shadow-md transition-all duration-500 ${
-                        isPlaying ? "border-accent ring-4 ring-accent/30 scale-105" : "border-neutral-700"
+                  /* Virtual Teacher Studio (free_avatar) */
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-neutral-900 via-neutral-950 to-black p-4">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent pointer-events-none" />
+
+                    <div className="relative z-10 flex flex-col items-center text-center">
+                      <div className={`relative rounded-full overflow-hidden transition-all duration-500 w-28 h-28 sm:w-36 sm:h-36 ${
+                        isPlaying
+                          ? "ring-4 ring-primary ring-offset-4 ring-offset-neutral-950 shadow-[0_0_35px_rgba(0,86,210,0.4)] scale-105"
+                          : "ring-2 ring-neutral-700"
                       }`}>
                         <img
                           src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=400&auto=format&fit=crop"
-                          alt="AI Teacher"
+                          alt="Prof. Sahayak"
                           className="w-full h-full object-cover"
                         />
                       </div>
 
-                      {/* Warm AI Pulse Waveform */}
+                      <span className="text-white text-sm font-bold tracking-wide mt-3">
+                        Prof. Sahayak AI
+                      </span>
+                      <span className="text-neutral-400 text-xs font-mono mt-0.5">
+                        {activeLanguage === "hi" ? "अध्यापन सत्र (Hindi)" : activeLanguage === "hinglish" ? "Interactive Hinglish Session" : "Adaptive Lecture Studio"}
+                      </span>
+
+                      {/* Waveform Equalizer when Playing */}
                       {isPlaying && (
                         <div className="flex items-center gap-1 mt-3">
-                          <span className="w-1.5 h-3 bg-accent rounded-full animate-bounce"></span>
-                          <span className="w-1.5 h-5 bg-highlight rounded-full animate-bounce [animation-delay:0.15s]"></span>
-                          <span className="w-1.5 h-7 bg-accent rounded-full animate-bounce [animation-delay:0.3s]"></span>
-                          <span className="w-1.5 h-4 bg-primary rounded-full animate-bounce [animation-delay:0.45s]"></span>
-                          <span className="w-1.5 h-2 bg-accent rounded-full animate-bounce [animation-delay:0.6s]"></span>
+                          <span className="w-1.5 h-3.5 bg-accent rounded-full animate-bounce"></span>
+                          <span className="w-1.5 h-6 bg-highlight rounded-full animate-bounce [animation-delay:0.15s]"></span>
+                          <span className="w-1.5 h-8 bg-primary rounded-full animate-bounce [animation-delay:0.3s]"></span>
+                          <span className="w-1.5 h-5 bg-accent rounded-full animate-bounce [animation-delay:0.45s]"></span>
+                          <span className="w-1.5 h-2.5 bg-highlight rounded-full animate-bounce [animation-delay:0.6s]"></span>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Overlay Status Badge */}
-                {!segment.video_url && (
-                  <div className="absolute top-3 left-3 flex items-center gap-2 z-10">
-                    <span className="text-[10px] px-2.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-white font-mono font-bold border border-white/20 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                      {segment.audio_url ? "ElevenLabs AI Voice" : "AI Teacher Synced"}
+                {/* Top Status & Controls Overlay */}
+                <div className="relative z-20 flex items-center justify-between p-3 sm:p-4 bg-gradient-to-b from-black/80 via-black/30 to-transparent">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-white font-mono font-bold border border-white/20 flex items-center gap-1.5 shadow-md">
+                      <span className={`w-2 h-2 rounded-full ${isPlaying ? "bg-emerald-400 animate-pulse" : "bg-neutral-500"}`}></span>
+                      {segment.audio_url ? "ElevenLabs Voice" : "AI Teacher Synced"}
                     </span>
                     {segment.is_reteach && (
-                      <span className="text-[10px] px-2.5 py-0.5 rounded bg-accent/90 backdrop-blur-md text-white font-mono font-bold animate-pulse">
+                      <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-accent/90 backdrop-blur-md text-white font-mono font-bold animate-pulse shadow-md">
                         Adaptive Reteach
                       </span>
                     )}
                   </div>
-                )}
 
-                {/* Playback Controls Overlay (when no native video controls) */}
-                {!segment.video_url && (
-                  <div className="relative z-10 flex items-center justify-between pt-2">
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
+                    {/* Speed Selector */}
+                    <div className="flex items-center bg-black/70 backdrop-blur-md rounded-md p-0.5 border border-white/20 text-[10px] font-mono font-bold text-white">
+                      {[1.0, 1.25, 1.5].map((rate) => (
+                        <button
+                          key={rate}
+                          onClick={() => handleRateChange(rate)}
+                          className={`px-1.5 py-0.5 rounded transition-colors ${
+                            playbackRate === rate ? "bg-primary text-white" : "text-neutral-300 hover:text-white"
+                          }`}
+                        >
+                          {rate}x
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => setPlayerViewMode("split")}
+                      className="p-1.5 rounded-md bg-black/70 hover:bg-black/90 backdrop-blur-md text-white border border-white/20 text-xs flex items-center gap-1 transition-all"
+                      title="Switch to Split View"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Split View</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* In-Video Live Subtitle Pill */}
+                <div className="relative z-20 px-4 pb-2 pointer-events-none">
+                  <div className="max-w-3xl mx-auto px-4 py-2.5 rounded-xl bg-black/80 backdrop-blur-md border border-white/10 text-center shadow-lg pointer-events-auto">
+                    <p className="text-xs sm:text-sm font-medium text-white leading-relaxed drop-shadow-sm line-clamp-2">
+                      "{activeCaption || segment.spoken_script}"
+                    </p>
+                  </div>
+                </div>
+
+                {/* Bottom Scrub Timeline & Playback Bar */}
+                <div className="relative z-20 p-3 sm:p-4 bg-gradient-to-t from-black/95 via-black/80 to-transparent space-y-2">
+                  <div 
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const clickRatio = (e.clientX - rect.left) / rect.width;
+                      const newSec = clickRatio * durationSec;
+                      handleSkip(newSec - progressSec);
+                    }}
+                    className="w-full h-1.5 hover:h-2.5 bg-white/20 rounded-full cursor-pointer relative group/timeline transition-all"
+                  >
+                    <div 
+                      className="h-full bg-primary rounded-full relative transition-all"
+                      style={{ width: `${Math.min(100, Math.max(0, (progressSec / (durationSec || 1)) * 100))}%` }}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md scale-0 group-hover/timeline:scale-100 transition-transform" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-white">
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsPlaying(!isPlaying)}
-                        className="w-8 h-8 rounded bg-primary hover:bg-primary-hover text-white flex items-center justify-center shadow-xs transition-all hover:scale-105 active:scale-95"
+                        className="w-9 h-9 rounded-full bg-primary hover:bg-primary-hover text-white flex items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95"
+                        title={isPlaying ? "Pause Lecture" : "Play Lecture"}
                       >
-                        {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+                        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
                       </button>
+
                       <button
-                        onClick={() => {
-                          setProgressSec(0);
-                          if (audioRef.current) audioRef.current.currentTime = 0;
-                          setIsPlaying(true);
-                        }}
-                        className="w-8 h-8 rounded bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center transition-colors"
+                        onClick={() => handleSkip(-10)}
+                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs"
+                        title="Rewind 10 seconds"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
+
+                      <button
+                        onClick={() => handleSkip(10)}
+                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs"
+                        title="Skip forward 10 seconds"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                      </button>
+
                       <button
                         onClick={() => setIsMuted(!isMuted)}
-                        className="w-8 h-8 rounded bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center transition-colors"
+                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs ml-1"
+                        title={isMuted ? "Unmute" : "Mute"}
                       >
                         {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5" />}
                       </button>
+
+                      <div className="hidden sm:flex items-center gap-1.5 text-xs text-neutral-300 font-mono font-semibold ml-2">
+                        <span>{Math.floor(progressSec)}s</span>
+                        <span className="text-neutral-500">/</span>
+                        <span>{durationSec}s</span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs text-neutral-300 font-mono font-semibold">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>{Math.floor(progressSec)}s / {durationSec}s</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Live Captions Transcript Box */}
-              <div className="bg-white rounded-lg p-4 border border-border flex-1 flex flex-col justify-between shadow-2xs">
-                <div>
-                  <div className="flex items-center justify-between pb-2 border-b border-border mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-                      Spoken Subtitles & Transcript
-                    </span>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handleStartTokenStream}
                         disabled={isStreaming}
-                        className="text-[10px] px-2 py-0.5 rounded bg-[#E9F1FC] text-primary hover:bg-primary hover:text-white font-mono font-bold transition-all flex items-center gap-1 border border-primary/20"
+                        className="text-[10px] sm:text-xs px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white font-mono font-bold transition-all flex items-center gap-1 border border-white/10"
                         title="Stream real-time LLM token explanation"
                       >
-                        <Sparkles className="w-2.5 h-2.5" />
-                        <span>{isStreaming ? "Streaming..." : "Live Stream"}</span>
+                        <Sparkles className="w-3 h-3 text-highlight" />
+                        <span className="hidden sm:inline">{isStreaming ? "Streaming..." : "Live Stream"}</span>
                       </button>
-                      <span className="text-[10px] text-primary font-mono font-bold">Live Synced</span>
                     </div>
                   </div>
-                  <p className="text-sm text-ink-primary leading-relaxed font-medium">
-                    "{activeCaption || segment.spoken_script}"
-                  </p>
+                </div>
+              </div>
+
+              {/* Live Subtitle Transcript Ribbon & Natural Language Switcher */}
+              <div className="bg-white rounded-xl p-4 sm:p-5 border border-border space-y-4 shadow-2xs">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                      Spoken Subtitles & Transcript
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-[#0F7B3F] font-mono font-bold border border-emerald-200">
+                      Live Synced
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                    <button
+                      onClick={() => setIsTranscriptExpanded(!isTranscriptExpanded)}
+                      className="text-xs text-ink-muted hover:text-primary transition-colors flex items-center gap-1 font-semibold"
+                    >
+                      <span>{isTranscriptExpanded ? "Collapse Script" : "View Full Script"}</span>
+                      {isTranscriptExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="mt-3">
+                <p className="text-sm sm:text-base text-ink-primary leading-relaxed font-medium">
+                  "{activeCaption || segment.spoken_script}"
+                </p>
+
+                {isTranscriptExpanded && (
+                  <div className="p-4 rounded-lg bg-canvas-elevated border border-border space-y-3 mt-2">
+                    <h5 className="text-xs font-bold uppercase text-ink-muted">Complete Segment Transcript</h5>
+                    <p className="text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap">
+                      {streamedText || segment.spoken_script}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+                  <CitationChip citations={segment.citations} />
+
+                  <form onSubmit={handleNaturalLanguageSwitch} className="relative w-full sm:w-80">
+                    <input
+                      type="text"
+                      value={naturalQuery}
+                      onChange={(e) => setNaturalQuery(e.target.value)}
+                      placeholder="Ask in natural language (e.g. 'Explain in Hindi')"
+                      className="w-full px-3.5 py-2 rounded-md bg-white border border-border text-xs text-ink-primary placeholder-ink-muted focus:outline-none focus:border-primary transition-colors pr-9"
+                    />
+                    <button
+                      type="submit"
+                      className="absolute right-1.5 top-1.5 p-1.5 rounded bg-black hover:bg-neutral-800 text-white transition-colors"
+                      title="Submit query"
+                    >
+                      <Send className="w-3 h-3" />
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* Lower Stage: Blackboard (Visual Spec) & Concept Checkpoint */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div className="lg:col-span-7 flex flex-col space-y-3">
+                  <div className="flex items-center justify-between pb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+                      Interactive Blackboard & Demonstrator
+                    </span>
+                    <span className="text-xs text-primary font-semibold">Live Visual Canvas</span>
+                  </div>
+                  <div className="min-h-[380px]">
+                    <VisualRenderer visualSpec={segment.visual_spec} />
+                  </div>
+                </div>
+
+                <div className="lg:col-span-5 flex flex-col space-y-3">
+                  <div className="flex items-center justify-between pb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+                      Pedagogical Checkpoint
+                    </span>
+                    {isPausedForCheckpoint && (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-[#FFF1E6] text-accent font-bold border border-orange-200 animate-pulse">
+                        Paused for Answer
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Concept Checkpoint Card */}
+                  <div className="bg-white rounded-xl p-5 border border-border shadow-2xs space-y-4">
+                    <div className="flex items-center gap-2 pb-2.5 border-b border-border">
+                      <HelpCircle className="w-4 h-4 text-primary" />
+                      <h3 className="font-bold text-sm text-ink-primary">Concept Mastery Check</h3>
+                    </div>
+
+                    <p className="text-xs sm:text-sm font-semibold text-ink-primary leading-relaxed">
+                      {segment.checkpoint_question.question}
+                    </p>
+
+                    {/* Multiple Choice Options */}
+                    {segment.checkpoint_question.options && (
+                      <div className="grid grid-cols-1 gap-2">
+                        {segment.checkpoint_question.options.map((opt, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setStudentAnswer(opt)}
+                            className={`text-left p-3 rounded-lg border text-xs transition-all ${
+                              studentAnswer === opt
+                                ? "bg-[#E9F1FC] border-primary text-primary font-bold shadow-2xs"
+                                : "bg-white border-border text-ink-secondary hover:border-primary/50 hover:bg-canvas-elevated"
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Free Text Input */}
+                    {!segment.checkpoint_question.options && (
+                      <textarea
+                        rows={3}
+                        value={studentAnswer}
+                        onChange={(e) => setStudentAnswer(e.target.value)}
+                        placeholder="Explain your understanding in your own words..."
+                        className="w-full p-3 rounded-md bg-white border border-border text-xs text-ink-primary placeholder-ink-muted focus:outline-none focus:border-primary"
+                      />
+                    )}
+
+                    {feedbackMessage && (
+                      <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-[#0F7B3F] font-bold flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span className="whitespace-pre-wrap">{feedbackMessage}</span>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSubmitAnswer} className="space-y-3 pt-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <DemoModeToggle
+                            isDemoMode={isDemoMode}
+                            onToggle={setIsDemoMode}
+                          />
+
+                          {/* Voice Answer STT Button */}
+                          <button
+                            type="button"
+                            onClick={isRecording ? stopRecording : startRecording}
+                            className={`p-2 rounded-full border transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                              isRecording 
+                                ? "bg-rose-50 border-rose-500 text-rose-600 animate-pulse ring-2 ring-rose-300"
+                                : "bg-white border-border text-ink-secondary hover:border-primary hover:text-primary"
+                            }`}
+                            title={isRecording ? "Stop voice recording" : "Answer with Voice (Deepgram Nova-2)"}
+                          >
+                            {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                            <span className="text-[11px] hidden sm:inline">
+                              {isRecording ? "Listening..." : "Voice Answer"}
+                            </span>
+                          </button>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isSubmittingAnswer || (!studentAnswer.trim() && !isRecording)}
+                          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-black hover:bg-neutral-800 text-white font-bold text-xs shadow-2xs transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>{isSubmittingAnswer ? "Evaluating..." : "Check Answer"}</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* SPLIT MODE (SIDE-BY-SIDE) */
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Video + Transcript */}
+              <div className="lg:col-span-6 flex flex-col space-y-4">
+                {/* Video Viewport */}
+                <div className="relative rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950 aspect-video w-full shadow-xl flex flex-col justify-between group">
+                  {segment.video_url ? (
+                    <video
+                      ref={videoRef}
+                      src={segment.video_url.startsWith("http") ? segment.video_url : `${apiBaseUrl}${segment.video_url}`}
+                      playsInline
+                      autoPlay={isPlaying}
+                      muted={isMuted}
+                      className="absolute inset-0 w-full h-full object-contain bg-black"
+                      onTimeUpdate={() => {
+                        if (videoRef.current) setProgressSec(videoRef.current.currentTime);
+                      }}
+                      onEnded={() => {
+                        setIsPlaying(false);
+                        setIsPausedForCheckpoint(true);
+                      }}
+                    />
+                  ) : segment.avatar_video_url ? (
+                    <video
+                      ref={videoRef}
+                      src={segment.avatar_video_url}
+                      playsInline
+                      autoPlay={isPlaying}
+                      muted={isMuted}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-neutral-900 via-neutral-950 to-black p-4">
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 border-primary/50 shadow-md">
+                        <img
+                          src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=400&auto=format&fit=crop"
+                          alt="AI Teacher"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <span className="text-white text-xs font-bold mt-2">Prof. Sahayak AI</span>
+                    </div>
+                  )}
+
+                  {/* Top Bar */}
+                  <div className="relative z-20 flex items-center justify-between p-3 bg-gradient-to-b from-black/80 to-transparent">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-black/70 text-white font-mono font-bold border border-white/20">
+                      AI Teacher Synced
+                    </span>
+                    <button
+                      onClick={() => setPlayerViewMode("theater")}
+                      className="p-1 rounded bg-black/70 text-white border border-white/20 text-xs flex items-center gap-1"
+                      title="Switch to Large Screen Theater"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Bottom Controls */}
+                  <div className="relative z-20 p-3 bg-gradient-to-t from-black/95 to-transparent flex items-center justify-between text-white">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsPlaying(!isPlaying)}
+                        className="w-8 h-8 rounded-full bg-primary hover:bg-primary-hover text-white flex items-center justify-center"
+                      >
+                        {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+                      </button>
+                      <button
+                        onClick={() => handleSkip(-10)}
+                        className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => setIsMuted(!isMuted)}
+                        className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                      >
+                        {isMuted ? <VolumeX className="w-3 h-3 text-rose-400" /> : <Volume2 className="w-3 h-3" />}
+                      </button>
+                    </div>
+                    <span className="text-[11px] font-mono">{Math.floor(progressSec)}s / {durationSec}s</span>
+                  </div>
+                </div>
+
+                {/* Subtitles */}
+                <div className="bg-white rounded-xl p-4 border border-border space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">Spoken Subtitles</span>
+                    <button
+                      onClick={handleStartTokenStream}
+                      disabled={isStreaming}
+                      className="text-[10px] px-2 py-0.5 rounded bg-[#E9F1FC] text-primary font-mono font-bold"
+                    >
+                      <Sparkles className="w-2.5 h-2.5 inline mr-1" />
+                      Live Stream
+                    </button>
+                  </div>
+                  <p className="text-xs sm:text-sm text-ink-primary leading-relaxed font-medium">
+                    "{activeCaption || segment.spoken_script}"
+                  </p>
                   <CitationChip citations={segment.citations} />
                 </div>
               </div>
 
-              {/* Natural Language Switcher */}
-              <form onSubmit={handleNaturalLanguageSwitch} className="relative">
-                <input
-                  type="text"
-                  value={naturalQuery}
-                  onChange={(e) => setNaturalQuery(e.target.value)}
-                  placeholder="Ask in natural language (e.g. 'Explain in Hindi')"
-                  className="w-full px-3.5 py-2 rounded-md bg-white border border-border text-xs text-ink-primary placeholder-ink-muted focus:outline-none focus:border-primary transition-colors pr-9"
-                />
-                <button
-                  type="submit"
-                  className="absolute right-1.5 top-1.5 p-1.5 rounded bg-black hover:bg-neutral-800 text-white transition-colors"
-                >
-                  <Send className="w-3 h-3" />
-                </button>
-              </form>
-            </div>
-
-            {/* Right Pane: Subject Visual Spec (7 cols) */}
-            <div className="xl:col-span-7 flex flex-col space-y-3">
-              <div className="flex-1 min-h-[360px]">
-                <VisualRenderer visualSpec={segment.visual_spec} />
-              </div>
-
-              {/* Checkpoint Question Card */}
-              <div className="bg-white rounded-lg p-5 border border-border shadow-2xs">
-                <div className="flex items-center justify-between pb-2.5 border-b border-border mb-3">
-                  <div className="flex items-center gap-2">
-                    <HelpCircle className="w-4 h-4 text-primary" />
-                    <h3 className="font-bold text-sm text-ink-primary">Concept Checkpoint</h3>
-                  </div>
-                  {isPausedForCheckpoint && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-[#FFF1E6] text-accent font-bold border border-orange-200 animate-pulse">
-                      Paused for Answer
-                    </span>
-                  )}
+              {/* Right Column: Visual Stage + Checkpoint */}
+              <div className="lg:col-span-6 flex flex-col space-y-4">
+                <div className="min-h-[340px]">
+                  <VisualRenderer visualSpec={segment.visual_spec} />
                 </div>
 
-                <p className="text-sm font-semibold text-ink-primary mb-3 leading-relaxed">
-                  {segment.checkpoint_question.question}
-                </p>
+                {/* Checkpoint Question Card */}
+                <div className="bg-white rounded-xl p-5 border border-border shadow-2xs space-y-3">
+                  <h3 className="font-bold text-sm text-ink-primary flex items-center gap-1.5">
+                    <HelpCircle className="w-4 h-4 text-primary" />
+                    <span>Concept Checkpoint</span>
+                  </h3>
+                  <p className="text-xs font-medium text-ink-primary">
+                    {segment.checkpoint_question.question}
+                  </p>
 
-                {/* Multiple Choice Options */}
-                {segment.checkpoint_question.options && (
-                  <div className="grid grid-cols-1 gap-2 mb-3">
-                    {segment.checkpoint_question.options.map((opt, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setStudentAnswer(opt)}
-                        className={`text-left p-3 rounded-md border text-xs transition-all ${
-                          studentAnswer === opt
-                            ? "bg-[#E9F1FC] border-primary text-primary font-bold shadow-2xs"
-                            : "bg-white border-border text-ink-secondary hover:border-primary/50 hover:bg-canvas-elevated"
-                        }`}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Free Text & Voice Recording Input */}
-                <form onSubmit={handleSubmitAnswer} className="space-y-3">
-                  {!segment.checkpoint_question.options && (
-                    <textarea
-                      rows={2}
-                      value={studentAnswer}
-                      onChange={(e) => setStudentAnswer(e.target.value)}
-                      placeholder="Explain your understanding in your own words..."
-                      className="w-full p-3 rounded-md bg-white border border-border text-xs text-ink-primary placeholder-ink-muted focus:outline-none focus:border-primary"
-                    />
+                  {segment.checkpoint_question.options && (
+                    <div className="grid grid-cols-1 gap-2">
+                      {segment.checkpoint_question.options.map((opt, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setStudentAnswer(opt)}
+                          className={`text-left p-2.5 rounded border text-xs transition-all ${
+                            studentAnswer === opt
+                              ? "bg-[#E9F1FC] border-primary text-primary font-bold shadow-2xs"
+                              : "bg-white border-border text-ink-secondary hover:bg-canvas-elevated"
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
                   )}
 
                   {feedbackMessage && (
-                    <div className="p-3 rounded bg-emerald-50 border border-emerald-200 text-xs text-[#0F7B3F] font-bold flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                      <span className="whitespace-pre-wrap">{feedbackMessage}</span>
+                    <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-xs text-[#0F7B3F] font-bold">
+                      {feedbackMessage}
                     </div>
                   )}
 
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
-                    <div className="flex items-center gap-3">
-                      <DemoModeToggle
-                        isDemoMode={isDemoMode}
-                        onToggle={setIsDemoMode}
-                      />
+                  <form onSubmit={handleSubmitAnswer} className="flex items-center justify-between gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={isRecording ? stopRecording : startRecording}
+                      className="p-2 rounded-full border text-xs"
+                      title="Answer with Voice"
+                    >
+                      {isRecording ? <MicOff className="w-3.5 h-3.5 text-rose-500" /> : <Mic className="w-3.5 h-3.5" />}
+                    </button>
 
-                      {/* Microphone STT Button */}
-                      <button
-                        type="button"
-                        onClick={isRecording ? stopRecording : startRecording}
-                        className={`p-2 rounded-full border transition-all flex items-center gap-1.5 text-xs font-semibold ${
-                          isRecording 
-                            ? "bg-rose-50 border-rose-500 text-rose-600 animate-pulse ring-2 ring-rose-300"
-                            : "bg-white border-border text-ink-secondary hover:border-primary hover:text-primary"
-                        }`}
-                        title={isRecording ? "Stop voice recording" : "Answer with Voice (Deepgram Nova-2)"}
-                      >
-                        {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                        <span className="text-[11px] hidden sm:inline">
-                          {isRecording ? "Listening..." : "Voice Answer"}
-                        </span>
-                      </button>
-                    </div>
-
-                    {/* Submit Answer CTA */}
                     <button
                       type="submit"
-                      disabled={isSubmittingAnswer || (!studentAnswer.trim() && !isRecording)}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-md bg-black hover:bg-neutral-800 text-white font-bold text-xs shadow-2xs transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40"
+                      disabled={isSubmittingAnswer || !studentAnswer.trim()}
+                      className="px-4 py-2 rounded-md bg-black text-white font-bold text-xs"
                     >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>{isSubmittingAnswer ? "Evaluating Concept..." : "Check Answer & Continue"}</span>
+                      {isSubmittingAnswer ? "Checking..." : "Submit Answer"}
                     </button>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 

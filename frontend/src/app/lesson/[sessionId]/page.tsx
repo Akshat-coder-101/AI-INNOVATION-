@@ -169,24 +169,32 @@ export default function LessonPage() {
   const isMastered = completedSegmentIds.includes(currentSegmentId);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4.5rem)] -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 overflow-hidden bg-white">
+    <div className="flex flex-col h-[calc(100vh-4rem)] w-full overflow-hidden bg-white relative">
       {/* Top Workspace Bar */}
       <header className="px-4 py-2.5 bg-white border-b border-border flex items-center justify-between shrink-0 z-20">
         {/* Left: Breadcrumbs & Toggle Sidebar */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsNavOpen(!isNavOpen)}
-            className="lg:hidden p-1.5 rounded border border-border bg-white text-ink-secondary hover:text-ink-primary"
-            title="Toggle Course Syllabus"
+            className={`px-2.5 py-1.5 rounded border transition-all text-xs flex items-center gap-1.5 ${
+              isNavOpen
+                ? "bg-[#E9F1FC] text-primary border-primary/30 font-bold"
+                : "bg-white border-border text-ink-secondary hover:text-ink-primary hover:bg-canvas-elevated"
+            }`}
+            title={isNavOpen ? "Hide Course Syllabus" : "Show Course Syllabus"}
           >
-            <Menu className="w-4 h-4" />
+            <Menu className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Syllabus</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/5 font-mono">
+              {completedSegmentIds.length}/{lessonPlan.segments.length}
+            </span>
           </button>
 
           <div className="flex items-center gap-2 text-xs">
-            <Link href="/dashboard" className="text-ink-muted hover:text-primary transition-colors">
+            <Link href="/dashboard" className="text-ink-muted hover:text-primary transition-colors hidden sm:inline">
               Courses
             </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-border" />
+            <ChevronRight className="w-3.5 h-3.5 text-border hidden sm:inline" />
             <span className="font-semibold text-ink-primary truncate max-w-[180px] sm:max-w-xs">
               {lessonPlan.topic}
             </span>
@@ -216,10 +224,10 @@ export default function LessonPage() {
             onClick={() => setIsNotesOpen(!isNotesOpen)}
             className={`px-3 py-1.5 rounded border transition-colors text-xs flex items-center gap-1.5 ${
               isNotesOpen
-                ? "bg-primary text-white border-primary"
-                : "bg-white border-border text-ink-secondary hover:text-ink-primary"
+                ? "bg-primary text-white border-primary font-bold shadow-2xs"
+                : "bg-white border-border text-ink-secondary hover:text-ink-primary hover:bg-canvas-elevated"
             }`}
-            title="Toggle Notes Panel"
+            title="Toggle Notes & Citations Panel"
           >
             <FileText className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Notes & Citations</span>
@@ -229,6 +237,18 @@ export default function LessonPage() {
 
       {/* Main Stage Body (Sidebar ↔ Main Centered Content ↔ Right Panel) */}
       <div className="flex-1 flex overflow-hidden relative">
+        {/* Slide-out Handle when Syllabus is closed */}
+        {!isNavOpen && (
+          <button
+            onClick={() => setIsNavOpen(true)}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white border border-l-0 border-border shadow-md rounded-r-md py-3 px-1 hover:bg-[#E9F1FC] text-ink-muted hover:text-primary transition-all group"
+            title="Slide open syllabus"
+            aria-label="Slide open course syllabus"
+          >
+            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform text-primary" />
+          </button>
+        )}
+
         {/* 1. Left Sidebar: Syllabus Tree (240–280px) */}
         <CourseNavigationSidebar
           lessonPlan={lessonPlan}
@@ -239,9 +259,9 @@ export default function LessonPage() {
           onToggle={() => setIsNavOpen(false)}
         />
 
-        {/* 2. Main Centered Content Area (max-w-[760px] reading comfort) */}
-        <main className="flex-1 overflow-y-auto bg-white flex flex-col justify-between scrollbar-thin">
-          <div className="max-w-4xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* 2. Main Centered Content Area (Spacious reading & large video comfort) */}
+        <main className="flex-1 overflow-y-auto bg-white flex flex-col justify-between scrollbar-thin overflow-x-hidden">
+          <div className="max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
             {/* Top of Every Lesson: Concept Title + Mastery Pill + "Why this matters" */}
             <div className="pb-4 border-b border-border space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-3">

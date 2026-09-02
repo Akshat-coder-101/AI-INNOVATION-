@@ -117,9 +117,11 @@ export default function NotesAndResourcesPanel({
 
   return (
     <aside
-      className={`fixed inset-y-0 right-0 z-40 w-80 sm:w-96 bg-white border-l border-border transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${
-        isOpen ? "translate-x-0" : "translate-x-full"
-      } flex flex-col h-full`}
+      className={`transition-all duration-300 ease-in-out flex flex-col h-full shrink-0 border-l border-border bg-white z-30 ${
+        isOpen
+          ? "w-80 sm:w-96 translate-x-0 opacity-100 relative shadow-sm"
+          : "w-0 translate-x-full overflow-hidden border-none opacity-0 pointer-events-none absolute lg:relative"
+      }`}
     >
       {/* Header & Tabs */}
       <div className="p-4 border-b border-border bg-white">
@@ -127,7 +129,7 @@ export default function NotesAndResourcesPanel({
           <div className="flex items-center gap-1">
             <button
               onClick={() => setActiveTab("notes")}
-              className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === "notes"
                   ? "bg-primary text-white"
                   : "text-ink-secondary hover:text-ink-primary hover:bg-canvas-elevated"
@@ -138,7 +140,7 @@ export default function NotesAndResourcesPanel({
             </button>
             <button
               onClick={() => setActiveTab("citations")}
-              className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === "citations"
                   ? "bg-primary text-white"
                   : "text-ink-secondary hover:text-ink-primary hover:bg-canvas-elevated"
@@ -149,7 +151,7 @@ export default function NotesAndResourcesPanel({
             </button>
             <button
               onClick={() => setActiveTab("resources")}
-              className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === "resources"
                   ? "bg-primary text-white"
                   : "text-ink-secondary hover:text-ink-primary hover:bg-canvas-elevated"
@@ -162,9 +164,11 @@ export default function NotesAndResourcesPanel({
 
           <button
             onClick={onToggle}
-            className="lg:hidden p-1 rounded text-ink-muted hover:text-ink-primary"
+            className="p-1.5 rounded-md hover:bg-canvas-elevated text-ink-muted hover:text-ink-primary transition-colors flex items-center gap-1 text-xs"
             aria-label="Close notes panel"
+            title="Close Panel"
           >
+            <span className="text-[11px] text-ink-muted hidden sm:inline">Close</span>
             ✕
           </button>
         </div>

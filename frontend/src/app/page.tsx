@@ -18,7 +18,7 @@ import {
 
 export default function LandingPage() {
   return (
-    <div className="space-y-16 pb-12">
+    <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-16 pb-16">
       {/* Hero Section */}
       <section className="relative pt-6 pb-10 text-center overflow-hidden">
         {/* Subtle Coursera Blue Ambient Glow */}

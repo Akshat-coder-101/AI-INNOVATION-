@@ -36,22 +36,27 @@ export default function CourseNavigationSidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-border transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${
-        isOpen ? "translate-x-0" : "-translate-x-full"
-      } flex flex-col h-full shrink-0`}
+      className={`transition-all duration-300 ease-in-out flex flex-col h-full shrink-0 border-r border-border bg-white z-30 ${
+        isOpen
+          ? "w-72 sm:w-80 translate-x-0 opacity-100 relative shadow-sm"
+          : "w-0 -translate-x-full overflow-hidden border-none opacity-0 pointer-events-none absolute lg:relative"
+      }`}
     >
       {/* Sidebar Header */}
       <div className="p-4 border-b border-border bg-white">
         <div className="flex items-center justify-between mb-2">
-          <span className="uppercase tracking-wider text-[10px] font-bold text-ink-muted">
-            Course Syllabus
+          <span className="uppercase tracking-wider text-[10px] font-bold text-primary flex items-center gap-1.5">
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Course Syllabus</span>
           </span>
           <button
             onClick={onToggle}
-            className="lg:hidden p-1 rounded text-ink-muted hover:text-ink-primary"
-            aria-label="Close navigation sidebar"
+            className="p-1.5 rounded-md hover:bg-canvas-elevated text-ink-muted hover:text-ink-primary transition-colors flex items-center gap-1 text-xs font-semibold"
+            aria-label="Collapse navigation sidebar"
+            title="Collapse Syllabus"
           >
-            ✕
+            <span className="text-[11px] text-ink-muted hidden sm:inline">Hide</span>
+            <ChevronRight className="w-3.5 h-3.5 rotate-180" />
           </button>
         </div>
 
