@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
   title: "Sahayak AI Teacher — Human-Like Adaptive AI Educator",
@@ -14,13 +15,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="sahayakDark" className="dark">
-      <body className="min-h-screen flex flex-col bg-base-100 text-slate-100 antialiased selection:bg-primary selection:text-white">
-        <Navbar />
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </main>
-        <Footer />
+    <html lang="en" data-theme="courseraLight">
+      <body className="min-h-screen flex flex-col bg-white text-ink-primary antialiased selection:bg-primary-soft selection:text-primary">
+        <AuthProvider>
+          <Navbar />
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {children}
+          </main>
+          <Footer />
+        </AuthProvider>
       </body>
     </html>
   );

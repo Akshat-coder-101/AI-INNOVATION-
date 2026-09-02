@@ -1,48 +1,102 @@
 import math
 import re
-from typing import List, Dict, Any, Tuple
+import hashlib
+import logging
+import httpx
+from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 from ..database import DBMaterialChunk
 from ..models.schemas import Citation
+from ..config import settings
 
-class RAGService:
-    @staticmethod
-    def generate_embedding(text: str) -> List[float]:
+logger = logging.getLogger("sahayak.rag")
+
+class EmbeddingService:
+    @classmethod
+    def _deterministic_sha256_embedding(cls, text: str, dim: int = 768) -> List[float]:
         """
-        Generates a 64-dimensional semantic pseudo-vector using token n-gram distribution,
-        ensuring fast, deterministic, reproducible embeddings without requiring external API credits.
-        If OpenAI/Anthropic embeddings are configured, this can be swapped easily.
+        Produces a stable, deterministic 768-dimensional pseudo-vector using SHA-256 tokens.
+        100% consistent across server restarts and process lifetimes (unlike Python hash()).
         """
-        dim = 64
         vec = [0.0] * dim
         words = re.findall(r'\w+', text.lower())
         if not words:
             return vec
-            
+
         for i, word in enumerate(words):
-            h = hash(word)
-            pos = abs(h) % dim
+            h_bytes = hashlib.sha256(word.encode("utf-8")).digest()
+            h_int = int.from_bytes(h_bytes[:4], byteorder="big")
+            pos = h_int % dim
             weight = 1.0 / (1.0 + math.log(i + 1))
-            vec[pos] += weight * (1.0 if (h >> 3) % 2 == 0 else -1.0)
-            
+            sign = 1.0 if (h_bytes[4] % 2 == 0) else -1.0
+            vec[pos] += weight * sign
+
             # Bigram feature
             if i > 0:
-                h2 = hash(words[i-1] + "_" + word)
-                pos2 = abs(h2) % dim
-                vec[pos2] += 0.5 * weight
+                h2_bytes = hashlib.sha256(f"{words[i-1]}_{word}".encode("utf-8")).digest()
+                h2_int = int.from_bytes(h2_bytes[:4], byteorder="big")
+                pos2 = h2_int % dim
+                vec[pos2] += 0.5 * weight * (1.0 if (h2_bytes[4] % 2 == 0) else -1.0)
 
-        # Normalize L2
+        # L2 Normalization
         norm = math.sqrt(sum(x * x for x in vec))
         if norm > 1e-9:
             vec = [x / norm for x in vec]
         return vec
+
+    @classmethod
+    def get_embedding(cls, text: str) -> List[float]:
+        """
+        Retrieves 768-dim embedding via Gemini text-embedding-004 if configured,
+        or falls back to deterministic SHA-256 embedding.
+        """
+        cleaned = text.strip()[:2048]
+        if not cleaned:
+            return [0.0] * 768
+
+        # 1. Try Gemini text-embedding-004 REST
+        if (
+            settings.GEMINI_API_KEY and 
+            len(settings.GEMINI_API_KEY.strip()) > 5 and 
+            settings.EMBEDDING_PROVIDER.lower() == "gemini"
+        ):
+            try:
+                endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={settings.GEMINI_API_KEY}"
+                payload = {
+                    "model": "models/text-embedding-004",
+                    "content": {
+                        "parts": [{"text": cleaned}]
+                    }
+                }
+                with httpx.Client(timeout=10.0) as client:
+                    resp = client.post(endpoint, json=payload)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        values = data.get("embedding", {}).get("values", [])
+                        if values and len(values) == 768:
+                            return values
+            except Exception as e:
+                logger.warning(f"[EmbeddingService] Gemini embedding call failed ({e}); falling back to deterministic SHA-256.")
+
+        # 2. Deterministic SHA-256 fallback
+        return cls._deterministic_sha256_embedding(cleaned, dim=768)
+
+
+class RAGService:
+    @staticmethod
+    def generate_embedding(text: str) -> List[float]:
+        return EmbeddingService.get_embedding(text)
 
     @staticmethod
     def cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
         if not vec_a or not vec_b or len(vec_a) != len(vec_b):
             return 0.0
         dot = sum(a * b for a, b in zip(vec_a, vec_b))
-        return float(dot)
+        norm_a = math.sqrt(sum(a * a for a in vec_a))
+        norm_b = math.sqrt(sum(b * b for b in vec_b))
+        if norm_a < 1e-9 or norm_b < 1e-9:
+            return 0.0
+        return float(dot / (norm_a * norm_b))
 
     @classmethod
     def retrieve_relevant_chunks(
@@ -62,12 +116,13 @@ class RAGService:
             chunk_vec = c.embedding or cls.generate_embedding(c.content)
             sim = cls.cosine_similarity(query_vec, chunk_vec)
             
-            # Also calculate keyword overlap score boost
+            # Keyword overlap feature
             q_words = set(re.findall(r'\w+', query.lower()))
             c_words = set(re.findall(r'\w+', c.content.lower()))
             overlap = len(q_words.intersection(c_words)) / max(len(q_words), 1)
             
-            combined_score = 0.6 * sim + 0.4 * overlap
+            # Hybrid rank
+            combined_score = 0.7 * sim + 0.3 * overlap
             scored_chunks.append((c, combined_score))
 
         scored_chunks.sort(key=lambda x: x[1], reverse=True)
@@ -87,13 +142,20 @@ class RAGService:
         context_blocks = []
         citations = []
         for chunk, score in scored:
-            context_blocks.append(f"[{chunk.chapter} - Page {chunk.page or 1}]:\n{chunk.content}")
+            ch_name = chunk.chapter or "General"
+            p_num = chunk.page or 1
+            content = chunk.content or ""
+            context_blocks.append(f"[{ch_name} - Page {p_num}]:\n{content}")
+            
+            # Real confidence score bounded strictly between 0.0 and 1.0 without artificial clamp
+            true_confidence = max(0.0, min(1.0, round(float(score), 3)))
+            snippet_text = (content[:140] + "...") if len(content) > 140 else content
             citations.append(Citation(
-                chapter=chunk.chapter or "General",
+                chapter=ch_name,
                 page=chunk.page,
                 section=chunk.section,
-                snippet=chunk.content[:140] + "...",
-                confidence=round(min(max(score, 0.75), 0.99), 2)
+                snippet=snippet_text,
+                confidence=true_confidence
             ))
 
         full_context = "\n\n".join(context_blocks)

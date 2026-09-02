@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
@@ -10,6 +11,7 @@ from ..models.schemas import (
     LanguageSwitchRequest
 )
 from ..state_machine.teacher_agent import TeacherAgentStateMachine
+from ..services.llm import LLMService
 
 router = APIRouter(prefix="/lesson", tags=["Lesson Planning & Rendering"])
 
@@ -18,12 +20,12 @@ class SegmentRenderPayload(BaseModel):
     language: Optional[str] = None
 
 @router.post("/plan", response_model=LessonPlan)
-def create_lesson_plan(
+async def create_lesson_plan(
     req: LessonPlanRequest,
     db: Session = Depends(get_db)
 ):
     try:
-        plan = TeacherAgentStateMachine.generate_lesson_plan(
+        plan = await TeacherAgentStateMachine.generate_lesson_plan(
             topic=req.topic,
             material_id=req.material_id,
             profile=req.learner_profile,
@@ -80,7 +82,7 @@ async def render_segment(
                 effective_session_id = sess.id
             else:
                 # Create a demo session on the fly
-                plan = TeacherAgentStateMachine.generate_lesson_plan(
+                plan = await TeacherAgentStateMachine.generate_lesson_plan(
                     topic="Newton's Laws and Mechanical Energy",
                     material_id=None,
                     profile=None,
@@ -120,3 +122,38 @@ async def switch_language(
         db=db
     )
     return segment_payload
+
+@router.api_route("/segment/{segment_id}/stream", methods=["GET", "POST"])
+async def stream_segment_explanation(
+    segment_id: int,
+    session_id: Optional[str] = Query(None),
+    language: Optional[str] = Query(None),
+    body: Optional[SegmentRenderPayload] = Body(None),
+    db: Session = Depends(get_db)
+):
+    effective_session_id = session_id or (body.session_id if body else None)
+    effective_lang = language or (body.language if body else None) or "en"
+    
+    concept = "Educational Principle"
+    if effective_session_id:
+        sess = db.query(DBLessonSession).filter(DBLessonSession.id == effective_session_id).first()
+        if sess and sess.plan_json:
+            segments = sess.plan_json.get("segments", []) if isinstance(sess.plan_json, dict) else []
+            seg = next((s for s in segments if s.get("id") == segment_id), None)
+            if seg:
+                concept = seg.get("concept", sess.topic)
+            else:
+                concept = sess.topic
+
+    system_prompt = f"You are Sahayak AI Teacher explaining '{concept}' in {effective_lang}. Deliver clear, engaging, intuitive pedagogical explanations."
+    user_prompt = f"Explain the core mechanics and intuition of {concept}."
+
+    async def event_generator():
+        try:
+            async for token in LLMService.stream_response(system_prompt, user_prompt, temperature=0.3):
+                yield f"data: {token}\n\n"
+        except Exception as e:
+            yield f"data: {str(e)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

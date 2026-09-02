@@ -34,21 +34,21 @@ class IngestResponse(BaseModel):
     preview: str
 
 class Citation(BaseModel):
-    chapter: str
+    chapter: str = "General"
     page: Optional[int] = None
     section: Optional[str] = None
-    snippet: str
+    snippet: str = ""
     confidence: float = 0.95
 
 # --- Lesson Planner Schemas ---
 class CheckpointQuestion(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: str = "mcq" # mcq | short_answer | problem_solving
-    question: str
+    question: str = ""
     options: Optional[List[str]] = None
-    correct_answer: str
+    correct_answer: str = ""
     hints: Optional[List[str]] = None
-    concept_tested: str
+    concept_tested: str = ""
 
 class LessonSegmentPlan(BaseModel):
     id: int
@@ -130,6 +130,8 @@ class LessonSegmentRender(BaseModel):
     visual_spec: VisualSpec
     audio_url: Optional[str] = None
     avatar_video_url: Optional[str] = None
+    video_url: Optional[str] = None
+    video_status: Optional[str] = "unavailable"
     captions: List[CaptionItem] = []
     citations: List[Citation] = []
     checkpoint_question: CheckpointQuestion
@@ -155,6 +157,9 @@ class InteractionResponse(BaseModel):
     new_checkpoint_question: Optional[CheckpointQuestion] = None
     reteach_segment: Optional[LessonSegmentRender] = None
     next_segment_id: Optional[int] = None
+    transcript: Optional[str] = None
+    answer_text: Optional[str] = None
+    audio_url: Optional[str] = None
 
 class LanguageSwitchRequest(BaseModel):
     session_id: str

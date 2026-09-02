@@ -93,7 +93,7 @@ flowchart TD
 2. [`backend/main.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/main.py)
    - Application entry point. Configures CORS middleware for seamless local and cloud communication, initializes database models during lifespan startup, and mounts all modular API routers.
 3. [`backend/app/config.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/config.py)
-   - Centralized environment configuration via Pydantic `BaseSettings`. Loads LLM keys (Anthropic/OpenAI), TTS keys (ElevenLabs), Avatar keys (D-ID/HeyGen), and database connection strings with fallback defaults.
+   - Centralized environment configuration via Pydantic `BaseSettings`. Loads LLM keys (Google Gemini / Groq / Anthropic), TTS keys (ElevenLabs), Avatar keys (D-ID/HeyGen), and database connection strings with fallback defaults.
 4. [`backend/app/database.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/database.py)
    - SQLAlchemy ORM engine and session provider. Defines database tables:
      - `materials` & `material_chunks`: Stores ingested documents and embedding vectors.
@@ -127,14 +127,16 @@ flowchart TD
 11. [`backend/app/services/rag.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/rag.py)
     - Vector search and citation grounding engine. Calculates cosine similarity and keyword overlap to retrieve source chunks and enforce zero-hallucination guardrails.
 12. [`backend/app/services/llm.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/llm.py)
-    - LLM interface for Anthropic Claude (`claude-3-7-sonnet`) and OpenAI (`gpt-4o`) with fallback synthesis.
+    - LLM interface for Google Gemini (`gemini-2.5-flash`), Groq (`llama-3.3-70b-versatile`), and Anthropic Claude (`claude-3-7-sonnet`) with fallback synthesis.
 13. [`backend/app/services/tts.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/tts.py)
     - Text-to-speech engine supporting ElevenLabs multilingual voice synthesis with browser Web Speech API fallback.
-14. [`backend/app/services/avatar.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/avatar.py)
-    - Talking teacher generator supporting D-ID, HeyGen, and an interactive animated teacher canvas fallback.
-15. [`backend/app/services/assessment.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/assessment.py)
+14. [`backend/app/services/stt.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/stt.py)
+    - Speech-to-text service supporting Deepgram Nova-2 for ultra-fast, high accuracy audio transcription.
+15. [`backend/app/services/avatar.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/avatar.py)
+    - Talking teacher generator supporting free interactive animated canvas, free Hugging Face inference, and Colossyan.
+16. [`backend/app/services/assessment.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/assessment.py)
     - Dynamic quiz generator querying only concepts taught in the active session, auto-grading submissions, and compiling learning diagnostic reports.
-16. [`backend/app/services/learning_path.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/learning_path.py)
+17. [`backend/app/services/learning_path.py`](file:///c:/Users/LENOVO/OneDrive/Desktop/ai%20innovation/backend/app/services/learning_path.py)
     - Generates multi-tiered Bloom's taxonomy curriculum DAGs with prerequisite dependencies and per-node completion tracking.
 
 ---

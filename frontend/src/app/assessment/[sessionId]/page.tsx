@@ -3,20 +3,20 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, Quiz, QuizGradeResponse } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { recordSessionCompletion } from "@/lib/analytics";
 import { 
   GraduationCap, 
-  CheckCircle2, 
+  Check, 
   XCircle, 
   ArrowRight, 
-  HelpCircle, 
-  Sparkles, 
-  Award, 
-  Clock 
+  Sparkles
 } from "lucide-react";
 
 export default function AssessmentPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const sessionId = params.sessionId as string;
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -56,6 +56,16 @@ export default function AssessmentPage() {
         answers,
       });
       setGradeResult(res);
+
+      // Record this real completed session in learner analytics
+      recordSessionCompletion(user?.id || "default-user", {
+        topic: quiz.topic,
+        score: Math.round(res.score_percentage),
+        timeMinutes: 20,
+        misconceptionsCount: res.results.filter((r) => !r.is_correct).length,
+        status: "Completed",
+        date: "Today",
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -70,11 +80,11 @@ export default function AssessmentPage() {
   if (isLoading) {
     return (
       <div className="py-24 text-center space-y-4">
-        <div className="w-14 h-14 rounded-2xl bg-brand-600/20 border border-brand-500/30 text-brand-400 flex items-center justify-center mx-auto animate-pulse">
+        <div className="w-14 h-14 rounded bg-[#E9F1FC] text-primary flex items-center justify-center mx-auto animate-pulse">
           <GraduationCap className="w-7 h-7" />
         </div>
-        <h2 className="text-lg font-bold text-white">Generating Targeted Assessment</h2>
-        <p className="text-xs text-slate-400">
+        <h2 className="text-lg font-bold text-black">Generating Targeted Assessment</h2>
+        <p className="text-xs text-ink-muted">
           Synthesizing questions based strictly on the concepts taught during this session.
         </p>
       </div>
@@ -83,7 +93,7 @@ export default function AssessmentPage() {
 
   if (!quiz) {
     return (
-      <div className="py-20 text-center text-slate-400">
+      <div className="py-20 text-center text-ink-muted">
         <p>No active assessment found for this session.</p>
       </div>
     );
@@ -94,27 +104,27 @@ export default function AssessmentPage() {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs px-2.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-bold border border-brand-500/30">
+          <span className="text-xs px-2.5 py-0.5 rounded bg-[#E9F1FC] text-primary font-bold">
             Post-Lesson Assessment
           </span>
-          <span className="text-xs text-slate-400">Session Evaluation Engine</span>
+          <span className="text-xs text-ink-muted font-medium">Session Evaluation</span>
         </div>
-        <h1 className="text-3xl font-extrabold text-white">{quiz.topic}</h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <h1 className="text-3xl font-extrabold text-black">{quiz.topic}</h1>
+        <p className="text-sm text-ink-secondary mt-1 font-medium">
           Test your mastery across the key principles and boundary conditions explored in your lesson.
         </p>
       </div>
 
       {/* Grade Banner if completed */}
       {gradeResult && (
-        <div className="glass-panel rounded-2xl p-6 border border-emerald-500/40 bg-slate-950/80 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in zoom-in duration-300">
+        <div className="bg-white rounded-lg p-6 border border-emerald-300 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in fade-in duration-200">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-black text-xl">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 border-2 border-[#0F7B3F] text-[#0F7B3F] flex items-center justify-center font-black text-xl">
               {gradeResult.score_percentage}%
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">Assessment Complete</h3>
-              <p className="text-xs text-slate-300">
+              <h3 className="font-bold text-base text-black">Assessment Complete</h3>
+              <p className="text-xs text-ink-secondary">
                 You answered {gradeResult.total_score} of {gradeResult.max_score} questions correctly.
               </p>
             </div>
@@ -122,9 +132,9 @@ export default function AssessmentPage() {
 
           <button
             onClick={handleProceedToReport}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95"
+            className="flex items-center gap-2 px-6 py-2.5 rounded bg-black hover:bg-neutral-800 text-white font-bold text-xs shadow-md transition-all hover:scale-[1.01] active:scale-[0.99]"
           >
-            <span>View Full Learning Report</span>
+            <span>View Learning Report</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -139,29 +149,29 @@ export default function AssessmentPage() {
           return (
             <div
               key={q.id}
-              className={`glass-panel rounded-2xl p-6 border transition-all ${
+              className={`bg-white rounded-lg p-6 border transition-all shadow-2xs ${
                 result
                   ? result.is_correct
-                    ? "border-emerald-500/40 bg-emerald-950/10"
-                    : "border-rose-500/40 bg-rose-950/10"
-                  : "border-slate-800"
+                    ? "border-emerald-300 bg-emerald-50/20"
+                    : "border-rose-300 bg-rose-50/20"
+                  : "border-border"
               }`}
             >
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-                <span className="text-xs font-bold text-brand-300">
+              <div className="flex items-center justify-between pb-3 border-b border-border mb-3">
+                <span className="text-xs font-bold text-primary">
                   Question {idx + 1} · {q.concept}
                 </span>
                 {result && (
                   <span className={`text-xs font-bold flex items-center gap-1 ${
-                    result.is_correct ? "text-emerald-400" : "text-rose-400"
+                    result.is_correct ? "text-[#0F7B3F]" : "text-[#C21E1E]"
                   }`}>
-                    {result.is_correct ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                    {result.is_correct ? <Check className="w-4 h-4 stroke-[3]" /> : <XCircle className="w-4 h-4" />}
                     {result.is_correct ? "Correct" : "Needs Review"}
                   </span>
                 )}
               </div>
 
-              <p className="text-sm font-semibold text-slate-100 mb-4">{q.question}</p>
+              <p className="text-sm font-semibold text-black mb-4">{q.question}</p>
 
               {/* Options */}
               {q.options && (
@@ -174,10 +184,10 @@ export default function AssessmentPage() {
                         type="button"
                         onClick={() => handleSelectOption(q.id, opt)}
                         disabled={!!gradeResult}
-                        className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
+                        className={`w-full text-left p-3 rounded border text-xs transition-all ${
                           isSelected
-                            ? "bg-brand-600/30 border-brand-400 text-white font-semibold shadow-md shadow-brand-500/20"
-                            : "bg-slate-900/60 border-slate-800 text-slate-300 hover:border-brand-500/40 hover:bg-slate-800/60"
+                            ? "bg-[#E9F1FC] border-primary text-primary font-bold shadow-2xs"
+                            : "bg-white border-border text-ink-secondary hover:border-primary/50 hover:bg-canvas-elevated"
                         }`}
                       >
                         {opt}
@@ -189,7 +199,7 @@ export default function AssessmentPage() {
 
               {/* Feedback Item */}
               {result && (
-                <div className="mt-4 p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 leading-relaxed">
+                <div className="mt-4 p-3 rounded bg-canvas-elevated border border-border text-xs text-ink-secondary leading-relaxed">
                   {result.feedback}
                 </div>
               )}
@@ -203,7 +213,7 @@ export default function AssessmentPage() {
             <button
               type="submit"
               disabled={isSubmitting || Object.keys(answers).length < quiz.questions.length}
-              className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-brand-600/30 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+              className="flex items-center gap-2 px-8 py-3 rounded bg-black hover:bg-neutral-800 text-white font-bold text-sm shadow-md transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40"
             >
               <Sparkles className="w-4 h-4" />
               <span>{isSubmitting ? "Evaluating Responses..." : "Submit & Grade Assessment"}</span>

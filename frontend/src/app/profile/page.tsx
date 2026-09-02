@@ -6,14 +6,7 @@ import Link from "next/link";
 import { 
   User, 
   Award, 
-  CheckCircle2, 
-  AlertCircle, 
-  History, 
-  ArrowRight, 
-  Sliders, 
-  Clock, 
-  Sparkles, 
-  BookOpen 
+  History
 } from "lucide-react";
 
 export default function ProfilePage() {
@@ -37,7 +30,7 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="py-24 text-center text-slate-400">Loading Learner Profile...</div>
+      <div className="py-24 text-center text-ink-muted">Loading Learner Profile...</div>
     );
   }
 
@@ -46,29 +39,27 @@ export default function ProfilePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
       {/* Header Profile Card */}
-      <div className="glass-panel rounded-3xl p-8 border border-brand-500/30">
+      <div className="bg-white rounded-lg p-6 sm:p-8 border border-border shadow-2xs">
         <div className="flex flex-col sm:flex-row items-center gap-6">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-brand-600 via-indigo-500 to-accent-cyan p-1 shadow-xl">
-            <div className="w-full h-full rounded-xl bg-slate-950 flex items-center justify-center">
-              <User className="w-10 h-10 text-brand-300" />
-            </div>
+          <div className="w-16 h-16 rounded-full bg-[#E9F1FC] border border-blue-200 flex items-center justify-center">
+            <User className="w-8 h-8 text-primary" />
           </div>
 
           <div className="space-y-1 text-center sm:text-left flex-1">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h1 className="text-2xl font-bold text-white">{profile.name}</h1>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-bold border border-brand-500/30 capitalize">
+              <h1 className="text-2xl font-bold text-black">{profile.name}</h1>
+              <span className="text-xs px-2.5 py-0.5 rounded bg-[#E9F1FC] text-primary font-bold capitalize">
                 {profile.level} Level
               </span>
             </div>
-            <p className="text-xs text-slate-400">
-              Primary Goal: {profile.goal.replace("_", " ")} · Preferred Style: {profile.preferred_style}
+            <p className="text-xs text-ink-muted font-medium">
+              Primary Goal: {profile.goal?.replace("_", " ") || "Understand Concept"} · Preferred Style: {profile.preferred_style || "Visual"}
             </p>
           </div>
 
           <Link
             href="/topic"
-            className="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg shadow-brand-600/30 transition-all hover:scale-105"
+            className="px-5 py-2.5 rounded bg-black hover:bg-neutral-800 text-white font-bold text-xs shadow-md transition-all hover:scale-[1.01] active:scale-[0.99]"
           >
             Start New Lesson
           </Link>
@@ -78,18 +69,18 @@ export default function ProfilePage() {
       {/* Historical Topics & Scores */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Strong vs Weak Concepts */}
-        <div className="glass-panel rounded-2xl p-6 border border-slate-800 space-y-4">
-          <h3 className="font-bold text-sm text-white flex items-center gap-2">
-            <Award className="w-4 h-4 text-emerald-400" />
+        <div className="bg-white rounded-lg p-6 border border-border space-y-4 shadow-2xs">
+          <h3 className="font-bold text-sm text-black flex items-center gap-2">
+            <Award className="w-4 h-4 text-[#0F7B3F]" />
             <span>Mastery Diagnostics</span>
           </h3>
 
           <div className="space-y-3">
             <div>
-              <span className="text-xs text-emerald-400 font-bold block mb-1">Strong Concepts:</span>
+              <span className="text-xs text-[#0F7B3F] font-bold block mb-1.5">Strong Concepts:</span>
               <div className="flex flex-wrap gap-2">
                 {profile.strong_concepts.map((c, i) => (
-                  <span key={i} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300">
+                  <span key={i} className="text-xs px-2.5 py-1 rounded bg-emerald-50 border border-emerald-200 text-[#0F7B3F] font-semibold">
                     {c}
                   </span>
                 ))}
@@ -97,10 +88,10 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <span className="text-xs text-amber-400 font-bold block mb-1">Concepts Flagged for Revision:</span>
+              <span className="text-xs text-[#B75F00] font-bold block mb-1.5">Concepts Flagged for Revision:</span>
               <div className="flex flex-wrap gap-2">
                 {profile.weak_concepts.map((c, i) => (
-                  <span key={i} className="text-xs px-2.5 py-1 rounded-lg bg-amber-950/40 border border-amber-500/30 text-amber-300">
+                  <span key={i} className="text-xs px-2.5 py-1 rounded bg-amber-50 border border-amber-200 text-[#B75F00] font-semibold">
                     {c}
                   </span>
                 ))}
@@ -110,27 +101,27 @@ export default function ProfilePage() {
         </div>
 
         {/* Learning History */}
-        <div className="glass-panel rounded-2xl p-6 border border-slate-800 space-y-4">
-          <h3 className="font-bold text-sm text-white flex items-center gap-2">
-            <History className="w-4 h-4 text-cyan-400" />
+        <div className="bg-white rounded-lg p-6 border border-border space-y-4 shadow-2xs">
+          <h3 className="font-bold text-sm text-black flex items-center gap-2">
+            <History className="w-4 h-4 text-primary" />
             <span>Session History</span>
           </h3>
 
           <div className="space-y-2">
             {profile.scores_history.length > 0 ? (
               profile.scores_history.map((h, i) => (
-                <div key={i} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between text-xs">
+                <div key={i} className="p-3 rounded bg-canvas-elevated border border-border flex items-center justify-between text-xs">
                   <div>
-                    <h4 className="font-bold text-slate-200">{h.topic}</h4>
-                    <span className="text-[10px] text-slate-500">{h.date}</span>
+                    <h4 className="font-bold text-black">{h.topic}</h4>
+                    <span className="text-[10px] text-ink-muted">{h.date}</span>
                   </div>
-                  <span className="font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                  <span className="font-mono font-bold text-[#0F7B3F] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                     {h.score}%
                   </span>
                 </div>
               ))
             ) : (
-              <p className="text-xs text-slate-500 italic">No past sessions recorded yet.</p>
+              <p className="text-xs text-ink-muted italic">No past sessions recorded yet.</p>
             )}
           </div>
         </div>

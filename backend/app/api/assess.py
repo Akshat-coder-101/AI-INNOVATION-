@@ -7,23 +7,23 @@ from ..services.assessment import AssessmentService
 router = APIRouter(prefix="/assess", tags=["Assessment & Quiz"])
 
 @router.post("/quiz/{session_id}", response_model=Quiz)
-def get_or_generate_quiz(
+async def get_or_generate_quiz(
     session_id: str,
     db: Session = Depends(get_db)
 ):
     try:
-        quiz = AssessmentService.generate_quiz_for_session(session_id, db)
+        quiz = await AssessmentService.generate_quiz_for_session(session_id, db)
         return quiz
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Quiz generation failed: {str(e)}")
 
 @router.post("/grade", response_model=QuizGradeResponse)
-def grade_quiz(
+async def grade_quiz(
     submission: StudentQuizSubmission,
     db: Session = Depends(get_db)
 ):
     try:
-        res = AssessmentService.grade_quiz_submission(
+        res = await AssessmentService.grade_quiz_submission(
             session_id=submission.session_id,
             answers=submission.answers,
             db=db
