@@ -1,20 +1,25 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { LearningPath, PathNode, api } from "@/lib/api";
-import { CheckCircle, Circle, ArrowDown, Sparkles, Clock, Award, BookOpen } from "lucide-react";
+import { Check, Circle, ArrowDown, Sparkles, Clock, Award, BookOpen, PlayCircle } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 interface LearningPathDAGProps {
   initialPath: LearningPath;
 }
 
 export default function LearningPathDAG({ initialPath }: LearningPathDAGProps) {
+  const router = useRouter();
+  const { user } = useAuth();
+  
   const [path, setPath] = useState<LearningPath>(initialPath);
   const [activeNode, setActiveNode] = useState<PathNode | null>(path.nodes[0] || null);
 
   const handleToggleNode = async (nodeId: string) => {
     try {
-      const updated = await api.togglePathNode(path.topic_id, nodeId);
+      const updated = await api.togglePathNode(path.topic_id, nodeId, user?.id || "default-user");
       setPath(updated);
       const n = updated.nodes.find((item) => item.id === nodeId);
       if (n) setActiveNode(n);
@@ -23,28 +28,32 @@ export default function LearningPathDAG({ initialPath }: LearningPathDAGProps) {
     }
   };
 
+  const handleLaunchLesson = (node: PathNode) => {
+    router.push(`/setup?topic=${encodeURIComponent(node.title.replace(/^\d+\.\s*/, ""))}`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Path Header */}
-      <div className="glass-panel rounded-2xl p-6 border border-brand-500/30">
+      <div className="bg-white rounded-lg p-6 border border-border shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-bold border border-brand-500/30">
-                Curriculum DAG
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#E9F1FC] text-primary font-bold">
+                Bloom's Taxonomy Progression
               </span>
-              <span className="text-xs text-slate-400">Bloom's Taxonomy Progression</span>
+              <span className="text-xs text-ink-muted">6-Stage Cognitive Depth</span>
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">{path.title}</h1>
-            <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">{path.description}</p>
+            <h1 className="text-2xl font-bold text-black tracking-tight">{path.title}</h1>
+            <p className="text-xs text-ink-secondary mt-1 max-w-2xl leading-relaxed font-medium">{path.description}</p>
           </div>
 
-          <div className="flex items-center gap-4 bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-4 bg-canvas-elevated p-4 rounded-lg border border-border">
             <div className="text-right">
-              <span className="text-xs text-slate-400 block font-medium">Curriculum Progress</span>
-              <span className="text-xl font-extrabold text-cyan-400">{path.completion_percentage}%</span>
+              <span className="text-xs text-ink-muted block font-medium">Curriculum Progress</span>
+              <span className="text-xl font-extrabold text-primary">{path.completion_percentage}%</span>
             </div>
-            <div className="w-12 h-12 rounded-full bg-cyan-950 border-2 border-cyan-400 flex items-center justify-center font-bold text-xs text-cyan-300">
+            <div className="w-12 h-12 rounded-full bg-[#E9F1FC] border-2 border-primary flex items-center justify-center font-bold text-xs text-primary">
               {path.nodes.filter((n) => n.completed).length}/{path.nodes.length}
             </div>
           </div>
@@ -62,10 +71,10 @@ export default function LearningPathDAG({ initialPath }: LearningPathDAGProps) {
                 {/* Node Card */}
                 <div
                   onClick={() => setActiveNode(node)}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                  className={`p-4 rounded-lg border cursor-pointer transition-all ${
                     isSelected
-                      ? "glass-panel border-brand-400 shadow-xl shadow-brand-500/20 scale-[1.01]"
-                      : "bg-slate-900/60 border-slate-800 hover:border-slate-700"
+                      ? "bg-white border-primary shadow-md scale-[1.01]"
+                      : "bg-white border-border hover:border-primary/60 hover:bg-canvas-elevated"
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -76,25 +85,26 @@ export default function LearningPathDAG({ initialPath }: LearningPathDAGProps) {
                           e.stopPropagation();
                           handleToggleNode(node.id);
                         }}
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                        className={`w-8 h-8 rounded flex items-center justify-center transition-all ${
                           node.completed
-                            ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30"
-                            : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                            ? "bg-[#0F7B3F] text-white shadow-2xs"
+                            : "bg-canvas-elevated text-ink-muted hover:bg-white border border-border"
                         }`}
+                        title={node.completed ? "Mark as Incomplete" : "Mark as Completed"}
                       >
                         {node.completed ? (
-                          <CheckCircle className="w-5 h-5" />
+                          <Check className="w-4 h-4 stroke-[3]" />
                         ) : (
-                          <Circle className="w-5 h-5" />
+                          <Circle className="w-4 h-4" />
                         )}
                       </button>
 
                       <div>
-                        <h3 className={`text-sm font-bold ${node.completed ? "text-slate-200 line-through opacity-80" : "text-white"}`}>
+                        <h3 className={`text-sm font-bold ${node.completed ? "text-ink-muted line-through" : "text-black"}`}>
                           {node.title}
                         </h3>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
-                          <span className="capitalize">{node.difficulty}</span>
+                        <div className="flex items-center gap-2 text-xs text-ink-muted mt-0.5">
+                          <span className="capitalize font-medium">{node.difficulty}</span>
                           <span>•</span>
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" /> {node.estimated_hours}h
@@ -104,7 +114,7 @@ export default function LearningPathDAG({ initialPath }: LearningPathDAGProps) {
                     </div>
 
                     {node.score && (
-                      <span className="text-xs px-2 py-1 rounded-md bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 font-bold">
+                      <span className="text-xs px-2 py-1 rounded bg-emerald-50 text-[#0F7B3F] font-bold border border-emerald-200">
                         {node.score}% Mastery
                       </span>
                     )}
@@ -113,7 +123,7 @@ export default function LearningPathDAG({ initialPath }: LearningPathDAGProps) {
 
                 {/* Edge Indicator */}
                 {index < path.nodes.length - 1 && (
-                  <div className="flex justify-center my-1 text-slate-600">
+                  <div className="flex justify-center my-1 text-ink-muted">
                     <ArrowDown className="w-4 h-4" />
                   </div>
                 )}
@@ -125,53 +135,64 @@ export default function LearningPathDAG({ initialPath }: LearningPathDAGProps) {
         {/* Selected Node Deep Dive (5 cols) */}
         <div className="lg:col-span-5">
           {activeNode ? (
-            <div className="glass-panel rounded-2xl p-6 border border-slate-800 sticky top-24 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <span className="text-xs font-bold uppercase tracking-wider text-brand-300">
+            <div className="bg-white rounded-lg p-6 border border-border sticky top-24 space-y-4 shadow-2xs">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">
                   Node Inspector
                 </span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium capitalize">
+                <span className="text-xs px-2.5 py-0.5 rounded bg-canvas-elevated text-ink-secondary font-semibold capitalize border border-border">
                   {activeNode.difficulty} Module
                 </span>
               </div>
 
-              <h2 className="text-lg font-bold text-white">{activeNode.title}</h2>
-              <p className="text-xs text-slate-300 leading-relaxed">{activeNode.description}</p>
+              <h2 className="text-lg font-bold text-black">{activeNode.title}</h2>
+              <p className="text-xs text-ink-secondary leading-relaxed font-medium">{activeNode.description}</p>
 
-              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+              <div className="p-3.5 rounded bg-canvas-elevated border border-border space-y-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Estimated Duration:</span>
-                  <span className="text-slate-200 font-semibold">{activeNode.estimated_hours} Hours</span>
+                  <span className="text-ink-muted">Estimated Duration:</span>
+                  <span className="text-black font-semibold">{activeNode.estimated_hours} Hours</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Prerequisites:</span>
-                  <span className="text-cyan-300 font-semibold">
+                  <span className="text-ink-muted">Prerequisites:</span>
+                  <span className="text-primary font-semibold">
                     {activeNode.prerequisites.length > 0 ? activeNode.prerequisites.join(", ") : "None (Foundational)"}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Status:</span>
-                  <span className={activeNode.completed ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
-                    {activeNode.completed ? "Completed & Mastered" : "In Progress"}
+                  <span className="text-ink-muted">Status:</span>
+                  <span className={activeNode.completed ? "text-[#0F7B3F] font-bold" : "text-accent font-bold"}>
+                    {activeNode.completed ? "Completed & Mastered" : "Not Started / In Progress"}
                   </span>
                 </div>
               </div>
 
-              <button
-                onClick={() => handleToggleNode(activeNode.id)}
-                className={`w-full py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all ${
-                  activeNode.completed
-                    ? "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
-                    : "bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white shadow-brand-600/30"
-                }`}
-              >
-                {activeNode.completed ? "Mark Incomplete" : "Mark Node Completed"}
-              </button>
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-1">
+                <button
+                  onClick={() => handleLaunchLesson(activeNode)}
+                  className="w-full py-2.5 rounded bg-black hover:bg-neutral-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-2xs transition-colors"
+                >
+                  <PlayCircle className="w-4 h-4 text-accent" />
+                  <span>Launch AI Lesson on this Concept</span>
+                </button>
+
+                <button
+                  onClick={() => handleToggleNode(activeNode.id)}
+                  className={`w-full py-2 rounded font-semibold text-xs border transition-colors ${
+                    activeNode.completed
+                      ? "bg-white hover:bg-canvas-elevated text-ink-secondary border-border"
+                      : "bg-emerald-50 hover:bg-emerald-100 text-[#0F7B3F] border-emerald-300 font-bold"
+                  }`}
+                >
+                  {activeNode.completed ? "Mark as Incomplete" : "Mark as Completed"}
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="glass-panel rounded-2xl p-8 text-center text-slate-400">
-              <BookOpen className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-xs">Select any curriculum node to inspect details.</p>
+            <div className="bg-white rounded-lg p-8 text-center text-ink-muted border border-border">
+              <BookOpen className="w-8 h-8 text-ink-muted mx-auto mb-2" />
+              <p className="text-xs font-medium">Select any curriculum node to inspect details.</p>
             </div>
           )}
         </div>

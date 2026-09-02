@@ -1,78 +1,74 @@
 "use client";
 
-import { useState } from "react";
 import { Citation } from "@/lib/api";
-import { FileText, ExternalLink, X, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { useState } from "react";
 
 interface CitationChipProps {
-  citations: Citation[];
+  citations?: Citation[];
 }
 
 export default function CitationChip({ citations }: CitationChipProps) {
-  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
-  if (!citations || citations.length === 0) return null;
+  if (!citations || citations.length === 0) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-ink-muted py-1 font-mono">
+        <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+        <span>Grounded learning material</span>
+      </div>
+    );
+  }
+
+  const primary = citations[0];
 
   return (
-    <div className="mt-4 pt-3 border-t border-slate-800">
-      <div className="flex items-center gap-2 mb-2">
-        <FileText className="w-3.5 h-3.5 text-cyan-400" />
-        <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-          RAG Verified Source Citations ({citations.length})
+    <div className="space-y-1.5">
+      {/* Coursera-style pill-shaped chip: #E9F1FC background, #0056D2 text, 12px */}
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E9F1FC] text-primary text-xs font-semibold cursor-pointer hover:bg-blue-100 transition-colors"
+      >
+        <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+        <span>
+          Source: {primary.chapter || "Course Material"} (Page {primary.page || 1})
         </span>
+        {citations.length > 1 && (
+          <span className="text-[10px] px-1.5 py-0.2 bg-blue-200/60 rounded-full font-bold">
+            +{citations.length - 1} more
+          </span>
+        )}
+        {isExpanded ? (
+          <ChevronUp className="w-3 h-3 text-primary" />
+        ) : (
+          <ChevronDown className="w-3 h-3 text-primary" />
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {citations.map((c, i) => (
-          <button
-            key={i}
-            onClick={() => setSelectedCitation(c)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-900/50 text-xs transition-all hover:scale-105"
-          >
-            <span className="font-medium">{c.chapter}</span>
-            {c.page && <span className="text-cyan-400/70">· p.{c.page}</span>}
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-200">
-              {Math.round(c.confidence * 100)}% match
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Citation Detail Modal */}
-      {selectedCitation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass-panel max-w-lg w-full rounded-2xl p-6 border border-cyan-500/40 shadow-2xl relative animate-in fade-in zoom-in duration-200">
-            <button
-              onClick={() => setSelectedCitation(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2 mb-3 text-cyan-400">
-              <CheckCircle2 className="w-5 h-5" />
-              <h3 className="font-bold text-lg text-white">Grounded Source Verification</h3>
-            </div>
-
-            <div className="space-y-3 text-sm text-slate-300">
-              <div>
-                <span className="text-xs uppercase text-slate-400 font-semibold block">Origin Source:</span>
-                <p className="font-semibold text-slate-100">{selectedCitation.chapter} {selectedCitation.page ? `(Page ${selectedCitation.page})` : ''}</p>
-              </div>
-
-              <div>
-                <span className="text-xs uppercase text-slate-400 font-semibold block">Retrieved Chunk Snippet:</span>
-                <blockquote className="mt-1 p-3 rounded-lg bg-slate-900/90 border-l-4 border-cyan-400 text-xs text-slate-300 font-mono leading-relaxed italic">
-                  "{selectedCitation.snippet}"
-                </blockquote>
-              </div>
-
-              <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-slate-400">
-                <span>pgvector Cosine Grounding: {(selectedCitation.confidence * 100).toFixed(1)}%</span>
-                <span className="text-emerald-400">Zero-Hallucination Guardrail Active</span>
-              </div>
-            </div>
+      {/* Expanded Citations Accordion */}
+      {isExpanded && (
+        <div className="p-3 rounded-lg bg-white border border-border space-y-2.5 shadow-xs animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center justify-between text-xs font-bold text-primary pb-1 border-b border-border">
+            <span>Verified Source Materials</span>
+            <span className="text-[10px] font-mono font-normal text-ink-muted">Zero-Hallucination Grounded</span>
           </div>
+
+          {citations.map((cite, index) => (
+            <div key={index} className="text-xs space-y-1 bg-canvas-elevated p-2.5 rounded border border-border">
+              <div className="flex items-center justify-between text-xs font-medium text-ink-primary">
+                <span className="flex items-center gap-1 font-bold text-primary">
+                  <FileText className="w-3 h-3" />
+                  {cite.chapter || "Document Reference"}
+                </span>
+                <span className="text-ink-muted text-[11px] font-mono">
+                  Page {cite.page || 1} {cite.section ? `• ${cite.section}` : ""}
+                </span>
+              </div>
+              <blockquote className="text-xs text-ink-secondary italic border-l-2 border-primary pl-2 my-1">
+                "{cite.snippet}"
+              </blockquote>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -4,15 +4,12 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { 
-  User, 
   Sparkles, 
   Clock, 
   Languages, 
   GraduationCap, 
-  Target, 
   Sliders, 
-  ArrowRight, 
-  Layers 
+  ArrowRight
 } from "lucide-react";
 
 function SetupForm() {
@@ -58,22 +55,22 @@ function SetupForm() {
     <div className="max-w-3xl mx-auto space-y-8 pb-12">
       {/* Header */}
       <div>
-        <span className="text-xs font-bold uppercase tracking-wider text-brand-400">
+        <span className="text-xs font-bold uppercase tracking-wider text-primary">
           Personalization Engine
         </span>
-        <h1 className="text-3xl font-extrabold text-white mt-1">Configure Learner Profile</h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <h1 className="text-3xl font-extrabold text-black mt-1">Configure Learner Profile</h1>
+        <p className="text-sm text-ink-secondary mt-1 font-medium">
           {materialId
             ? `Calibrating adaptive lesson plan for uploaded document: "${filename || 'Document'}"`
             : `Personalizing instruction for: "${topic}"`}
         </p>
       </div>
 
-      <div className="glass-panel rounded-2xl p-6 sm:p-8 border border-brand-500/30 space-y-6">
+      <div className="bg-white rounded-lg p-6 sm:p-8 border border-border space-y-6 shadow-2xs">
         {/* Knowledge Level */}
         <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2 mb-3">
-            <GraduationCap className="w-4 h-4 text-brand-400" />
+          <label className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-2 mb-3">
+            <GraduationCap className="w-4 h-4 text-primary" />
             <span>Target Cognitive Level:</span>
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -85,14 +82,14 @@ function SetupForm() {
               <div
                 key={lvl.id}
                 onClick={() => setLevel(lvl.id)}
-                className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                className={`p-3.5 rounded border cursor-pointer transition-all ${
                   level === lvl.id
-                    ? "bg-brand-600/30 border-brand-400 text-white shadow-md shadow-brand-500/20"
-                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                    ? "bg-[#E9F1FC] border-primary text-black shadow-2xs"
+                    : "bg-white border-border text-ink-secondary hover:border-primary/50 hover:bg-canvas-elevated"
                 }`}
               >
-                <span className="font-bold text-xs text-slate-100 block">{lvl.title}</span>
-                <p className="text-[11px] text-slate-400 mt-1 leading-snug">{lvl.desc}</p>
+                <span className={`font-bold text-xs block ${level === lvl.id ? 'text-primary' : 'text-black'}`}>{lvl.title}</span>
+                <p className="text-xs text-ink-muted mt-1 leading-snug">{lvl.desc}</p>
               </div>
             ))}
           </div>
@@ -100,8 +97,8 @@ function SetupForm() {
 
         {/* Time Budget */}
         <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2 mb-3">
-            <Clock className="w-4 h-4 text-cyan-400" />
+          <label className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-2 mb-3">
+            <Clock className="w-4 h-4 text-primary" />
             <span>Available Time Budget:</span>
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -114,31 +111,31 @@ function SetupForm() {
               <div
                 key={item.mins}
                 onClick={() => setTimeBudget(item.mins)}
-                className={`p-3 rounded-xl border text-center cursor-pointer transition-all ${
+                className={`p-3 rounded border text-center cursor-pointer transition-all ${
                   timeBudget === item.mins
-                    ? "bg-cyan-950/60 border-cyan-400 text-white shadow-md shadow-cyan-500/20"
-                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                    ? "bg-[#E9F1FC] border-primary text-black shadow-2xs"
+                    : "bg-white border-border text-ink-secondary hover:border-primary/50 hover:bg-canvas-elevated"
                 }`}
               >
-                <span className="font-bold text-xs text-slate-100 block">{item.label}</span>
-                <span className="text-[10px] text-cyan-300/80 font-mono mt-0.5 block">{item.badge}</span>
+                <span className={`font-bold text-xs block ${timeBudget === item.mins ? 'text-primary' : 'text-black'}`}>{item.label}</span>
+                <span className="text-[10px] text-ink-muted font-mono mt-0.5 block">{item.badge}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Preferred Learning Style & Language */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t border-slate-800">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t border-border">
           {/* Preferred Style */}
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2 mb-2">
-              <Sliders className="w-4 h-4 text-purple-400" />
+            <label className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-2 mb-2">
+              <Sliders className="w-4 h-4 text-primary" />
               <span>Pedagogical Style:</span>
             </label>
             <select
               value={style}
               onChange={(e) => setStyle(e.target.value)}
-              className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-brand-500"
+              className="w-full p-2.5 rounded bg-white border border-border text-xs text-black focus:outline-none focus:border-primary font-medium"
             >
               <option value="visual">Visual & Interactive Diagrams</option>
               <option value="analogies">Analogy & Metaphor First</option>
@@ -149,14 +146,14 @@ function SetupForm() {
 
           {/* Language */}
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2 mb-2">
-              <Languages className="w-4 h-4 text-emerald-400" />
+            <label className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-2 mb-2">
+              <Languages className="w-4 h-4 text-primary" />
               <span>Instruction Language:</span>
             </label>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
-              className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-brand-500"
+              className="w-full p-2.5 rounded bg-white border border-border text-xs text-black focus:outline-none focus:border-primary font-medium"
             >
               <option value="en">English (Global)</option>
               <option value="hi">हिंदी (Hindi)</option>
@@ -166,11 +163,11 @@ function SetupForm() {
         </div>
 
         {/* Launch Button */}
-        <div className="pt-4 border-t border-slate-800 flex justify-end">
+        <div className="pt-4 border-t border-border flex justify-end">
           <button
             onClick={handleGenerateLesson}
             disabled={isGenerating}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-brand-600 via-indigo-600 to-accent-cyan hover:from-brand-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-brand-600/40 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 rounded bg-black hover:bg-neutral-800 text-white font-bold text-sm shadow-md transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40"
           >
             <Sparkles className="w-4 h-4" />
             <span>{isGenerating ? "Synthesizing Adaptive Lesson..." : "Launch AI Teaching Session"}</span>
@@ -184,7 +181,7 @@ function SetupForm() {
 
 export default function SetupPage() {
   return (
-    <Suspense fallback={<div className="text-center py-20 text-slate-400">Loading Configuration...</div>}>
+    <Suspense fallback={<div className="text-center py-20 text-ink-muted">Loading Configuration...</div>}>
       <SetupForm />
     </Suspense>
   );

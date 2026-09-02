@@ -4,7 +4,21 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, LessonPlan, LessonSegmentRender } from "@/lib/api";
 import TeacherPlayer from "@/components/TeacherPlayer";
-import { BrainCircuit, Sparkles, AlertCircle, ArrowLeft } from "lucide-react";
+import CourseNavigationSidebar from "@/components/CourseNavigationSidebar";
+import NotesAndResourcesPanel from "@/components/NotesAndResourcesPanel";
+import StickyAdaptiveBottomBar from "@/components/StickyAdaptiveBottomBar";
+import { 
+  BrainCircuit, 
+  AlertCircle, 
+  ArrowLeft, 
+  Menu, 
+  FileText, 
+  ChevronRight, 
+  Check, 
+  Bookmark, 
+  Sparkles,
+  Award
+} from "lucide-react";
 import Link from "next/link";
 
 export default function LessonPage() {
@@ -13,15 +27,21 @@ export default function LessonPage() {
   const sessionId = params.sessionId as string;
 
   const [lessonPlan, setLessonPlan] = useState<LessonPlan | null>(null);
-  const [initialSegment, setInitialSegment] = useState<LessonSegmentRender | null>(null);
+  const [currentSegment, setCurrentSegment] = useState<LessonSegmentRender | null>(null);
+  const [currentSegmentId, setCurrentSegmentId] = useState<number>(1);
+  const [completedSegmentIds, setCompletedSegmentIds] = useState<number[]>([]);
+  const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Responsive Drawer states
+  const [isNavOpen, setIsNavOpen] = useState<boolean>(false);
+  const [isNotesOpen, setIsNotesOpen] = useState<boolean>(false);
 
   useEffect(() => {
     async function loadLesson() {
       try {
         setIsLoading(true);
-        // Try fetching plan from backend
         let plan: LessonPlan;
         try {
           plan = await api.getLessonPlan(sessionId);
@@ -37,7 +57,8 @@ export default function LessonPage() {
 
         // Render segment 1
         const seg = await api.renderSegment(1, plan.session_id, plan.language);
-        setInitialSegment(seg);
+        setCurrentSegment(seg);
+        setCurrentSegmentId(1);
       } catch (err: any) {
         console.error(err);
         setError(err.message || "Failed to load lesson pipeline");
@@ -51,35 +72,76 @@ export default function LessonPage() {
     }
   }, [sessionId]);
 
+  // Handle switching to a specific segment from syllabus
+  const handleSelectSegment = async (segId: number) => {
+    if (!lessonPlan || segId === currentSegmentId) return;
+    try {
+      setIsLoading(true);
+      const seg = await api.renderSegment(segId, lessonPlan.session_id, lessonPlan.language);
+      setCurrentSegment(seg);
+      setCurrentSegmentId(segId);
+      setIsNavOpen(false);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSegmentChange = (nextSegId: number) => {
+    setCompletedSegmentIds((prev) => 
+      prev.includes(currentSegmentId) ? prev : [...prev, currentSegmentId]
+    );
+    setCurrentSegmentId(nextSegId);
+  };
+
   const handleLessonComplete = () => {
     if (lessonPlan) {
+      setCompletedSegmentIds((prev) => 
+        prev.includes(currentSegmentId) ? prev : [...prev, currentSegmentId]
+      );
       router.push(`/assessment/${lessonPlan.session_id}`);
     }
   };
 
-  if (isLoading) {
+  const handlePreviousSegment = () => {
+    if (currentSegmentId > 1) {
+      handleSelectSegment(currentSegmentId - 1);
+    }
+  };
+
+  const handleNextOrSubmit = () => {
+    if (!lessonPlan) return;
+    if (currentSegmentId >= lessonPlan.segments.length) {
+      handleLessonComplete();
+    } else {
+      handleSelectSegment(currentSegmentId + 1);
+    }
+  };
+
+  if (isLoading && !currentSegment) {
     return (
       <div className="py-24 text-center space-y-4">
-        <div className="w-16 h-16 rounded-2xl bg-brand-600/20 border border-brand-500/30 text-brand-400 flex items-center justify-center mx-auto animate-pulse">
-          <BrainCircuit className="w-8 h-8 animate-spin" />
+        <div className="w-14 h-14 rounded bg-[#E9F1FC] text-primary flex items-center justify-center mx-auto animate-pulse">
+          <BrainCircuit className="w-7 h-7 animate-spin" />
         </div>
-        <h2 className="text-xl font-bold text-white">Synthesizing Pedagogical Pipeline</h2>
-        <p className="text-xs text-slate-400 max-w-sm mx-auto">
-          Teacher Agent FSM is assembling lesson segments, rendering subject-aware visual models, and generating grounded audio.
+        <h2 className="text-lg font-bold text-ink-primary">Loading Adaptive Classroom...</h2>
+        <p className="text-xs text-ink-muted max-w-sm mx-auto">
+          Preparing curriculum syllabus, visual specs, and interactive checkpoints.
         </p>
       </div>
     );
   }
 
-  if (error || !lessonPlan || !initialSegment) {
+  if (error || !lessonPlan || !currentSegment) {
     return (
       <div className="py-20 max-w-lg mx-auto text-center space-y-4">
-        <AlertCircle className="w-12 h-12 text-rose-400 mx-auto" />
-        <h2 className="text-lg font-bold text-white">Lesson Loading Error</h2>
-        <p className="text-xs text-slate-400">{error || "Unable to render lesson session."}</p>
+        <AlertCircle className="w-10 h-10 text-[#C21E1E] mx-auto" />
+        <h2 className="text-lg font-bold text-ink-primary">Lesson Loading Error</h2>
+        <p className="text-xs text-ink-secondary">{error || "Unable to load lesson session."}</p>
         <Link
           href="/topic"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 text-white font-bold text-xs"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded bg-black text-white font-bold text-xs"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Return to Topic Selection</span>
@@ -88,13 +150,170 @@ export default function LessonPage() {
     );
   }
 
+  const handleRequestSimplerExplanation = async () => {
+    if (!lessonPlan) return;
+    try {
+      setIsLoading(true);
+      const res = await api.requestSimplification(lessonPlan.session_id, currentSegmentId);
+      if (res.reteach_segment) {
+        setCurrentSegment(res.reteach_segment);
+      }
+    } catch (err) {
+      console.error("Failed to request simplification:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const currentSegmentMeta = lessonPlan.segments.find((s) => s.id === currentSegmentId);
+  const isMastered = completedSegmentIds.includes(currentSegmentId);
+
   return (
-    <div className="space-y-6 pb-12">
-      <TeacherPlayer
-        initialSegment={initialSegment}
-        totalSegments={lessonPlan.segments.length}
-        onLessonComplete={handleLessonComplete}
-      />
+    <div className="flex flex-col h-[calc(100vh-4.5rem)] -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 overflow-hidden bg-white">
+      {/* Top Workspace Bar */}
+      <header className="px-4 py-2.5 bg-white border-b border-border flex items-center justify-between shrink-0 z-20">
+        {/* Left: Breadcrumbs & Toggle Sidebar */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsNavOpen(!isNavOpen)}
+            className="lg:hidden p-1.5 rounded border border-border bg-white text-ink-secondary hover:text-ink-primary"
+            title="Toggle Course Syllabus"
+          >
+            <Menu className="w-4 h-4" />
+          </button>
+
+          <div className="flex items-center gap-2 text-xs">
+            <Link href="/dashboard" className="text-ink-muted hover:text-primary transition-colors">
+              Courses
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5 text-border" />
+            <span className="font-semibold text-ink-primary truncate max-w-[180px] sm:max-w-xs">
+              {lessonPlan.topic}
+            </span>
+            <ChevronRight className="w-3.5 h-3.5 text-border" />
+            <span className="text-primary font-bold">
+              Part {String(currentSegmentId).padStart(2, "0")}
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Notes Toggle & Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsBookmarked(!isBookmarked)}
+            className={`px-3 py-1.5 rounded border transition-colors text-xs flex items-center gap-1.5 ${
+              isBookmarked
+                ? "bg-[#FFF1E6] text-accent border-orange-200 font-bold"
+                : "bg-white border-border text-ink-secondary hover:text-ink-primary"
+            }`}
+            title="Bookmark this concept"
+          >
+            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? "fill-current text-accent" : ""}`} />
+            <span className="hidden sm:inline">{isBookmarked ? "Saved" : "Save"}</span>
+          </button>
+
+          <button
+            onClick={() => setIsNotesOpen(!isNotesOpen)}
+            className={`px-3 py-1.5 rounded border transition-colors text-xs flex items-center gap-1.5 ${
+              isNotesOpen
+                ? "bg-primary text-white border-primary"
+                : "bg-white border-border text-ink-secondary hover:text-ink-primary"
+            }`}
+            title="Toggle Notes Panel"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Notes & Citations</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Stage Body (Sidebar ↔ Main Centered Content ↔ Right Panel) */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* 1. Left Sidebar: Syllabus Tree (240–280px) */}
+        <CourseNavigationSidebar
+          lessonPlan={lessonPlan}
+          currentSegmentId={currentSegmentId}
+          completedSegmentIds={completedSegmentIds}
+          onSelectSegment={handleSelectSegment}
+          isOpen={isNavOpen}
+          onToggle={() => setIsNavOpen(false)}
+        />
+
+        {/* 2. Main Centered Content Area (max-w-[760px] reading comfort) */}
+        <main className="flex-1 overflow-y-auto bg-white flex flex-col justify-between scrollbar-thin">
+          <div className="max-w-4xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+            {/* Top of Every Lesson: Concept Title + Mastery Pill + "Why this matters" */}
+            <div className="pb-4 border-b border-border space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                  ITEM {String(currentSegmentId).padStart(2, "0")} OF {String(lessonPlan.segments.length).padStart(2, "0")}
+                </span>
+
+                {/* Mastery Status Pill */}
+                <div className="flex items-center gap-1.5 text-xs font-semibold">
+                  {isMastered ? (
+                    <span className="bg-emerald-50 text-[#0F7B3F] border border-emerald-200 px-2.5 py-0.5 rounded flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      Completed
+                    </span>
+                  ) : currentSegment.is_reteach ? (
+                    <span className="bg-[#FFF1E6] text-accent border border-orange-200 px-2.5 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Adaptive Reteach
+                    </span>
+                  ) : (
+                    <span className="bg-[#E9F1FC] text-primary border border-blue-200 px-2.5 py-0.5 rounded flex items-center gap-1">
+                      <Award className="w-3.5 h-3.5" />
+                      In Progress ({currentSegmentMeta?.est_minutes || 5} min)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* True Black Large Concept Title */}
+              <h1 className="text-2xl font-bold tracking-tight text-black">
+                {currentSegmentMeta?.concept || currentSegment.concept}
+              </h1>
+
+              {/* "Why This Matters" Line */}
+              <p className="text-xs text-ink-muted leading-relaxed flex items-center gap-1.5">
+                <span className="font-bold text-ink-primary">Why this matters:</span>
+                <span>{currentSegmentMeta?.summary || "Essential foundational building block for deeper analytical problem solving."}</span>
+              </p>
+            </div>
+
+            {/* Vertical Stack */}
+            <div className="space-y-6">
+              <TeacherPlayer
+                initialSegment={currentSegment}
+                totalSegments={lessonPlan.segments.length}
+                onLessonComplete={handleLessonComplete}
+                onSegmentChange={handleSegmentChange}
+              />
+            </div>
+          </div>
+
+          {/* 3. Coursera Sticky Bottom Bar */}
+          <StickyAdaptiveBottomBar
+            currentSegmentId={currentSegmentId}
+            totalSegments={lessonPlan.segments.length}
+            isReteachActive={currentSegment.is_reteach}
+            onPrevious={handlePreviousSegment}
+            onNextOrSubmit={handleNextOrSubmit}
+            onRequestSimplerExplanation={handleRequestSimplerExplanation}
+            primaryCtaText={currentSegmentId >= lessonPlan.segments.length ? "Finish Lesson & Take Assessment" : "Next Item"}
+          />
+        </main>
+
+        {/* 4. Right Sidebar: Contextual Notes, Bookmarks & Citations */}
+        <NotesAndResourcesPanel
+          segment={currentSegment}
+          isOpen={isNotesOpen}
+          onToggle={() => setIsNotesOpen(false)}
+          isBookmarked={isBookmarked}
+          onToggleBookmark={() => setIsBookmarked(!isBookmarked)}
+        />
+      </div>
     </div>
   );
 }

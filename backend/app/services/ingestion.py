@@ -1,7 +1,7 @@
 import io
 import uuid
 import re
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from pypdf import PdfReader
 import docx
 import pptx
@@ -51,7 +51,8 @@ class IngestionService:
         current_text = []
         
         for para in doc.paragraphs:
-            if para.style.name.startswith("Heading"):
+            style_name = para.style.name if para.style and para.style.name else ""
+            if style_name.startswith("Heading"):
                 if current_text:
                     sections.append({
                         "heading": current_heading,
@@ -78,10 +79,12 @@ class IngestionService:
             slide_text = []
             title = f"Slide {i+1}"
             for shape in slide.shapes:
-                if shape.has_text_frame:
-                    for paragraph in shape.text_frame.paragraphs:
-                        if paragraph.text.strip():
-                            slide_text.append(paragraph.text.strip())
+                if getattr(shape, "has_text_frame", False):
+                    tf = getattr(shape, "text_frame", None)
+                    if tf:
+                        for paragraph in tf.paragraphs:
+                            if paragraph.text.strip():
+                                slide_text.append(paragraph.text.strip())
             if slide.shapes.title and slide.shapes.title.text.strip():
                 title = slide.shapes.title.text.strip()
             

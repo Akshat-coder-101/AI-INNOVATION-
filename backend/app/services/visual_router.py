@@ -1,5 +1,5 @@
 import math
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from .code_sandbox import CodeSandboxService
 from ..models.schemas import VisualSpec
 
@@ -10,7 +10,7 @@ class VisualRouter:
         concept: str, 
         visual_type: str, 
         depth: str = "beginner",
-        code_snippet: str = None
+        code_snippet: Optional[str] = None
     ) -> VisualSpec:
         """
         Routes the concept to the appropriate visual renderer based on visual_type.
@@ -155,7 +155,7 @@ class VisualRouter:
         )
 
     @classmethod
-    def _generate_code_execution_spec(cls, concept: str, depth: str, code_snippet: str = None) -> VisualSpec:
+    def _generate_code_execution_spec(cls, concept: str, depth: str, code_snippet: Optional[str] = None) -> VisualSpec:
         if not code_snippet:
             code_snippet = f"""# Python Demonstration: {concept}
 def demonstrate_{abs(hash(concept)) % 1000}():

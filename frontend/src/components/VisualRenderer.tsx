@@ -1,106 +1,149 @@
 "use client";
 
 import { useState } from "react";
-import { VisualSpec } from "@/lib/api";
+import { VisualSpec, api } from "@/lib/api";
 import { 
   Play, 
   Terminal, 
   Layers, 
   TrendingUp, 
   Calendar, 
-  FileCode, 
-  CheckCircle2, 
-  Activity, 
-  Info, 
-  Maximize2 
+  FileCode,
+  CheckCircle2,
+  AlertCircle,
+  Loader2
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine
+} from "recharts";
+import katex from "katex";
 
 interface VisualRendererProps {
   visualSpec: VisualSpec;
 }
 
+function KaTeXMath({ formula, inline = true }: { formula: string; inline?: boolean }) {
+  try {
+    const cleanFormula = formula.replace(/^\$+|\$+$/g, "").trim();
+    const html = katex.renderToString(cleanFormula, {
+      throwOnError: false,
+      displayMode: !inline,
+    });
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  } catch {
+    return <span className="font-mono text-xs">{formula}</span>;
+  }
+}
+
 export default function VisualRenderer({ visualSpec }: VisualRendererProps) {
   const { type, title, payload } = visualSpec;
-  const [activeTab, setActiveTab] = useState<string>("visual");
   const [selectedHotspot, setSelectedHotspot] = useState<any>(null);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [codeOutput, setCodeOutput] = useState<string>(payload?.output || payload?.stdout || "Output will appear here...");
+  const [codeOutput, setCodeOutput] = useState<string>(payload?.output || payload?.stdout || "Ready to execute Python script...");
+  const [executionSuccess, setExecutionSuccess] = useState<boolean | null>(null);
 
-  // Render Math/Physics Graph & Equations
+  // 1. MATH & PHYSICS ROUTER (KaTeX + Real Recharts Coordinate Chart)
   if (type === "equation/graph" || type.includes("math") || type.includes("physics")) {
     const xs = payload?.x_values || [-4, -3, -2, -1, 0, 1, 2, 3, 4];
     const ys = payload?.y_values || [16, 9, 4, 1, 0, 1, 4, 9, 16];
     const equations = payload?.equations || ["f(x) = x^2"];
     const steps = payload?.step_by_step || [];
 
+    // Construct valid Recharts data array with true negative & positive values
+    const chartData = xs.map((xVal: number, i: number) => ({
+      x: xVal,
+      y: ys[i] !== undefined ? ys[i] : 0,
+    }));
+
     return (
-      <div className="glass-panel rounded-2xl p-5 border border-indigo-500/30 flex flex-col h-full">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+      <div className="bg-white rounded-lg p-5 border border-border flex flex-col h-full shadow-2xs hover:shadow-md transition-shadow">
+        <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
           <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-indigo-400" />
-            <h3 className="font-bold text-sm text-slate-100">{title}</h3>
+            <TrendingUp className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-sm text-ink-primary">{title}</h3>
           </div>
-          <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
-            Math / Physics Engine
+          <span className="text-xs px-2.5 py-0.5 rounded bg-[#E9F1FC] text-primary font-bold border border-blue-200">
+            Interactive Visual Model
           </span>
         </div>
 
-        {/* Governing Equations Block */}
-        <div className="mb-4 p-3 rounded-xl bg-slate-900/90 border border-slate-800">
-          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
-            Governing Analytical Equations:
+        {/* Governing Analytical Formula with KaTeX */}
+        <div className="mb-4 p-3 rounded bg-canvas-elevated border border-border">
+          <span className="text-[11px] uppercase font-bold text-ink-muted tracking-wider block mb-1.5">
+            Governing Analytical Formula (LaTeX Rendered):
           </span>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             {equations.map((eq: string, idx: number) => (
-              <span key={idx} className="font-mono text-sm px-2.5 py-1 rounded bg-slate-800/80 text-cyan-300 border border-cyan-500/20 shadow-sm">
-                {eq}
-              </span>
+              <div 
+                key={idx} 
+                className="px-3 py-1.5 rounded bg-white text-primary border border-blue-200 shadow-2xs text-sm font-semibold flex items-center"
+              >
+                <KaTeXMath formula={eq} />
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Dynamic Coordinate Plot Canvas */}
-        <div className="relative flex-1 min-h-[220px] rounded-xl bg-slate-950/80 border border-slate-800/80 p-4 flex flex-col justify-center">
-          <div className="text-center mb-2">
-            <span className="text-xs font-semibold text-slate-300">{payload?.plot_title || "Dynamic State Trajectory"}</span>
+        {/* Real Dynamic Recharts Plot Canvas */}
+        <div className="relative flex-1 min-h-[220px] rounded bg-white border border-border p-3 flex flex-col justify-center">
+          <div className="text-center mb-1">
+            <span className="text-xs font-bold text-ink-primary font-mono">{payload?.plot_title || "Dynamic State Trajectory"}</span>
           </div>
 
-          <div className="relative h-40 w-full flex items-end justify-between px-6 pt-6 pb-4 border-b border-l border-slate-700">
-            {xs.map((x: number, i: number) => {
-              const y = ys[i] || 0;
-              const maxY = Math.max(...ys.map(Math.abs), 1);
-              const heightPct = Math.min(Math.max((Math.abs(y) / maxY) * 100, 10), 100);
-              return (
-                <div key={i} className="flex flex-col items-center gap-1 group relative">
-                  <div 
-                    className="w-3 bg-gradient-to-t from-indigo-600 to-cyan-400 rounded-t transition-all duration-300 group-hover:from-indigo-400 group-hover:to-cyan-200 group-hover:scale-y-105"
-                    style={{ height: `${heightPct}%` }}
-                  />
-                  <span className="text-[9px] text-slate-400 font-mono">{x}</span>
-                  
-                  {/* Tooltip on hover */}
-                  <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-[10px] text-cyan-300 px-1.5 py-0.5 rounded border border-slate-700 pointer-events-none whitespace-nowrap z-10">
-                    y: {y}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex justify-between text-[10px] text-slate-400 mt-2 px-2">
-            <span>← {payload?.x_label || "t (sec)"}</span>
-            <span>{payload?.y_label || "f(x)"} →</span>
+          <div className="w-full h-44">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis 
+                  dataKey="x" 
+                  stroke="#64748B" 
+                  fontSize={10} 
+                  tickLine={false} 
+                  label={{ value: payload?.x_label || "x (Input)", position: "insideBottom", offset: -5, fontSize: 10, fill: "#64748B" }}
+                />
+                <YAxis 
+                  stroke="#64748B" 
+                  fontSize={10} 
+                  tickLine={false}
+                  label={{ value: payload?.y_label || "f(x)", angle: -90, position: "insideLeft", fontSize: 10, fill: "#64748B" }}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: "#0F172A", color: "#F8FAFC", borderRadius: "6px", fontSize: "11px", fontWeight: "bold" }}
+                  itemStyle={{ color: "#38BDF8" }}
+                  formatter={(val: any) => [`${val}`, payload?.y_label || "f(x)"]}
+                  labelFormatter={(lbl: any) => `x = ${lbl}`}
+                />
+                <ReferenceLine y={0} stroke="#94A3B8" strokeWidth={1.5} />
+                <ReferenceLine x={0} stroke="#94A3B8" strokeWidth={1.5} />
+                <Line 
+                  type="monotone" 
+                  dataKey="y" 
+                  stroke="#0056D2" 
+                  strokeWidth={2.5} 
+                  dot={{ r: 3, fill: "#0056D2", strokeWidth: 1, stroke: "#FFFFFF" }} 
+                  activeDot={{ r: 5, fill: "#F97316" }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Step-by-Step Derivation */}
+        {/* Step-by-Step Analytical Derivation with KaTeX */}
         {steps.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-slate-800/80">
-            <span className="text-xs font-bold text-slate-300 block mb-2">Step-by-Step Analytical Derivation:</span>
-            <ul className="space-y-1 text-xs text-slate-400">
+          <div className="mt-4 pt-3 border-t border-border">
+            <span className="text-xs font-bold text-ink-secondary block mb-1.5">Analytical Derivation:</span>
+            <ul className="space-y-1.5 text-xs text-ink-secondary">
               {steps.map((st: string, idx: number) => (
-                <li key={idx} className="flex items-start gap-1.5">
-                  <span className="text-indigo-400 font-semibold">•</span>
-                  <span>{st}</span>
+                <li key={idx} className="flex items-start gap-1.5 leading-relaxed">
+                  <span className="text-primary font-bold mt-0.5">•</span>
+                  <span><KaTeXMath formula={st} /></span>
                 </li>
               ))}
             </ul>
@@ -110,34 +153,33 @@ export default function VisualRenderer({ visualSpec }: VisualRendererProps) {
     );
   }
 
-  // Render Biology Labeled Diagram
+  // 2. BIOLOGY & LIFE SCIENCES ROUTER
   if (type === "labeled-diagram" || type.includes("bio") || type.includes("diagram")) {
     const labels = payload?.labels || [];
-    const takeaways = payload?.takeaways || [];
 
     return (
-      <div className="glass-panel rounded-2xl p-5 border border-emerald-500/30 flex flex-col h-full">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+      <div className="bg-white rounded-lg p-5 border border-border flex flex-col h-full shadow-2xs hover:shadow-md transition-shadow">
+        <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
           <div className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-sm text-slate-100">{title}</h3>
+            <Layers className="w-5 h-5 text-[#0F7B3F]" />
+            <h3 className="font-bold text-sm text-ink-primary">{title}</h3>
           </div>
-          <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+          <span className="text-xs px-2.5 py-0.5 rounded bg-emerald-50 text-[#0F7B3F] font-bold border border-emerald-200">
             Biology & Life Sciences
           </span>
         </div>
 
         {/* Interactive SVG Diagram */}
-        <div className="relative rounded-xl bg-slate-950/90 border border-slate-800 overflow-hidden flex items-center justify-center p-2 min-h-[220px]">
+        <div className="relative rounded bg-white border border-border overflow-hidden flex items-center justify-center p-3 min-h-[200px]">
           {payload?.svg_code ? (
             <div 
-              className="w-full h-full"
+              className="w-full h-full flex items-center justify-center"
               dangerouslySetInnerHTML={{ __html: payload.svg_code }} 
             />
           ) : (
-            <div className="text-center p-6 text-slate-400">
-              <Layers className="w-10 h-10 text-emerald-400 mx-auto mb-2 opacity-80 animate-bounce" />
-              <p className="text-xs">Interactive Labeled Diagram Ready</p>
+            <div className="text-center p-6 text-ink-muted">
+              <Layers className="w-10 h-10 text-[#0F7B3F] mx-auto mb-2 opacity-80" />
+              <p className="text-xs font-semibold">Interactive Labeled Structural Model</p>
             </div>
           )}
         </div>
@@ -145,23 +187,23 @@ export default function VisualRenderer({ visualSpec }: VisualRendererProps) {
         {/* Interactive Hotspot Pills */}
         {labels.length > 0 && (
           <div className="mt-4">
-            <span className="text-xs font-bold text-slate-300 block mb-2">Interactive Structural Components:</span>
+            <span className="text-xs font-bold text-ink-secondary block mb-2">Structural Components:</span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {labels.map((item: any, idx: number) => (
                 <div 
                   key={idx}
                   onClick={() => setSelectedHotspot(item)}
-                  className={`p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                  className={`p-2.5 rounded border text-left cursor-pointer transition-all ${
                     selectedHotspot?.name === item.name
-                      ? "bg-emerald-950/60 border-emerald-400 text-white shadow-md shadow-emerald-500/20"
-                      : "bg-slate-900/60 border-slate-800 hover:border-emerald-500/50 text-slate-300"
+                      ? "bg-emerald-50 border-[#0F7B3F] text-ink-primary shadow-2xs scale-[1.02]"
+                      : "bg-white border-border hover:border-emerald-300 text-ink-secondary"
                   }`}
                 >
-                  <p className="font-bold text-xs text-emerald-300 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <p className="font-bold text-xs text-[#0F7B3F] flex items-center gap-1 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-[#0F7B3F]"></span>
                     {item.name}
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{item.role}</p>
+                  <p className="text-[11px] text-ink-muted mt-1 line-clamp-2">{item.role}</p>
                 </div>
               ))}
             </div>
@@ -171,36 +213,35 @@ export default function VisualRenderer({ visualSpec }: VisualRendererProps) {
     );
   }
 
-  // Render History Chronology & Timeline
+  // 3. CHRONOLOGY & HISTORY ROUTER
   if (type === "timeline/map" || type.includes("timeline") || type.includes("history")) {
     const events = payload?.events || [];
 
     return (
-      <div className="glass-panel rounded-2xl p-5 border border-purple-500/30 flex flex-col h-full">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+      <div className="bg-white rounded-lg p-5 border border-border flex flex-col h-full shadow-2xs hover:shadow-md transition-shadow">
+        <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
           <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-purple-400" />
-            <h3 className="font-bold text-sm text-slate-100">{title}</h3>
+            <Calendar className="w-5 h-5 text-[#B75F00]" />
+            <h3 className="font-bold text-sm text-ink-primary">{title}</h3>
           </div>
-          <span className="text-[11px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30">
-            Chronology & Historical Context
+          <span className="text-xs px-2.5 py-0.5 rounded bg-amber-50 text-[#B75F00] font-bold border border-amber-200">
+            Chronology & History
           </span>
         </div>
 
         {/* Timeline Events Stack */}
-        <div className="relative flex-1 overflow-y-auto pr-2 space-y-4 pl-4 border-l-2 border-purple-500/30 ml-2">
+        <div className="relative flex-1 overflow-y-auto pr-2 space-y-3 pl-4 border-l-2 border-amber-300 ml-2 max-h-[340px]">
           {events.map((ev: any, idx: number) => (
             <div key={idx} className="relative group">
-              {/* Dot */}
-              <div className="absolute -left-[23px] top-1.5 w-3.5 h-3.5 rounded-full bg-purple-500 border-2 border-slate-900 group-hover:scale-125 transition-transform" />
+              <div className="absolute -left-[23px] top-1.5 w-3.5 h-3.5 rounded-full bg-[#B75F00] border-2 border-white group-hover:scale-125 transition-transform shadow-2xs" />
               
-              <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 group-hover:border-purple-500/40 transition-colors">
+              <div className="p-3 rounded bg-white border border-border group-hover:border-amber-400 transition-colors">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-purple-300">{ev.year}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-200">{ev.tag}</span>
+                  <span className="text-xs font-mono font-bold text-[#B75F00]">{ev.year}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-[#B75F00] font-bold border border-amber-200">{ev.tag}</span>
                 </div>
-                <h4 className="font-semibold text-xs text-slate-200">{ev.title}</h4>
-                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{ev.desc}</p>
+                <h4 className="font-bold text-xs text-ink-primary">{ev.title}</h4>
+                <p className="text-xs text-ink-secondary mt-1 leading-relaxed">{ev.desc}</p>
               </div>
             </div>
           ))}
@@ -209,52 +250,73 @@ export default function VisualRenderer({ visualSpec }: VisualRendererProps) {
     );
   }
 
-  // Render Programming Sandbox & Real Execution Output
-  const code = payload?.code || "# Python Code Demonstration\nprint('Hello from Sahayak AI Teacher!')";
+  // 4. COMPUTER SCIENCE & CODE EXECUTION ROUTER
+  const code = payload?.code || "# Python Code Demonstration\nimport math\n\ndef compute_kinetic_energy(mass_kg, velocity_mps):\n    return 0.5 * mass_kg * (velocity_mps ** 2)\n\nprint('Kinetic Energy:', compute_kinetic_energy(1200, 25), 'Joules')";
   
-  const handleRunCode = () => {
+  const handleRunCode = async () => {
     setIsExecuting(true);
-    setTimeout(() => {
+    setExecutionSuccess(null);
+    try {
+      const res = await api.runPythonCode(code);
+      setExecutionSuccess(res.success);
+      setCodeOutput(res.output || res.stdout || res.stderr || "Process completed with 0 outputs.");
+    } catch (err: any) {
+      setExecutionSuccess(false);
+      setCodeOutput(`Execution Error: ${err.message || err}`);
+    } finally {
       setIsExecuting(false);
-      setCodeOutput(payload?.output || "Executed successfully.\nStdout: [144, 2025, 4624, 8100, 10404]\nComputed Empirical Metric: 5059.40");
-    }, 600);
+    }
   };
 
   return (
-    <div className="glass-panel rounded-2xl p-5 border border-cyan-500/30 flex flex-col h-full">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+    <div className="bg-white rounded-lg p-5 border border-border flex flex-col h-full shadow-2xs hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between pb-3 border-b border-border mb-3">
         <div className="flex items-center gap-2">
-          <FileCode className="w-5 h-5 text-cyan-400" />
-          <h3 className="font-bold text-sm text-slate-100">{title}</h3>
+          <FileCode className="w-5 h-5 text-primary" />
+          <h3 className="font-bold text-sm text-ink-primary">{title}</h3>
         </div>
         <button
           onClick={handleRunCode}
           disabled={isExecuting}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 hover:scale-105 active:scale-95"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-primary hover:bg-primary-hover text-white font-mono font-bold text-xs transition-all shadow-2xs hover:scale-105 active:scale-95 disabled:opacity-50"
         >
-          <Play className="w-3.5 h-3.5 fill-current" />
-          <span>{isExecuting ? "Executing..." : "Run Sandbox Code"}</span>
+          {isExecuting ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Play className="w-3.5 h-3.5 fill-current" />
+          )}
+          <span>{isExecuting ? "Running Sandbox..." : "Run Python"}</span>
         </button>
       </div>
 
       {/* Code Editor Panel */}
-      <div className="rounded-xl bg-slate-950 border border-slate-800/90 overflow-hidden mb-3">
-        <div className="bg-slate-900/90 px-3 py-1.5 border-b border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-          <span className="font-mono text-cyan-300">python_runner.py</span>
-          <span>Sandboxed Isolated Subprocess</span>
+      <div className="rounded bg-canvas-elevated border border-border overflow-hidden mb-3">
+        <div className="bg-white px-3 py-1.5 border-b border-border flex items-center justify-between text-[11px] text-ink-muted font-mono">
+          <span className="text-primary font-bold">sandbox_execution.py</span>
+          <span>Real Python 3 Subprocess Sandbox</span>
         </div>
-        <pre className="p-3 text-xs font-mono text-emerald-300 overflow-x-auto leading-relaxed max-h-[160px]">
+        <pre className="p-3 text-xs font-mono text-ink-primary overflow-x-auto leading-relaxed max-h-[160px]">
           <code>{code}</code>
         </pre>
       </div>
 
       {/* Terminal Output */}
-      <div className="flex-1 rounded-xl bg-slate-950 border border-slate-800/90 p-3 font-mono text-xs text-slate-300 flex flex-col justify-start">
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mb-1 border-b border-slate-800 pb-1">
-          <Terminal className="w-3 h-3 text-cyan-400" />
-          <span>Captured Stdout / Execution Stream</span>
+      <div className="flex-1 rounded bg-canvas-elevated border border-border p-3 font-mono text-xs text-ink-secondary flex flex-col justify-start">
+        <div className="flex items-center justify-between text-[10px] text-ink-muted mb-1 border-b border-border pb-1 font-bold">
+          <div className="flex items-center gap-1.5">
+            <Terminal className="w-3 h-3 text-primary" />
+            <span>Captured Standard Output</span>
+          </div>
+          {executionSuccess !== null && (
+            <span className={`flex items-center gap-1 ${executionSuccess ? "text-emerald-600" : "text-rose-600"}`}>
+              {executionSuccess ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+              {executionSuccess ? "Exit Code 0" : "Execution Failed"}
+            </span>
+          )}
         </div>
-        <pre className="text-cyan-200 text-xs whitespace-pre-wrap font-mono mt-1">
+        <pre className={`text-xs whitespace-pre-wrap font-mono mt-1 font-bold ${
+          executionSuccess === false ? "text-rose-600" : "text-primary"
+        }`}>
           {codeOutput}
         </pre>
       </div>

@@ -6,47 +6,91 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  darkMode: ["class", '[data-theme="dark"]'],
+  darkMode: ["class", '[data-theme="courseraDark"]'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        heading: ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        mono: ["JetBrains Mono", "monospace"],
+      },
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
-        brand: {
-          50: "#f0f4ff",
-          100: "#e0eaff",
-          200: "#c7d7fe",
-          300: "#a4bcfd",
-          400: "#8098f8",
-          500: "#6172f3",
-          600: "#444ce7",
-          700: "#3538cd",
-          800: "#2d31a6",
-          900: "#2d3282",
-          950: "#1a1c4b",
+        // Coursera Palette Tokens
+        primary: {
+          DEFAULT: "var(--color-primary)",
+          hover: "var(--color-primary-hover)",
+          soft: "var(--color-primary-soft)",
+          surface: "var(--color-primary-soft)",
+        },
+        btn: {
+          "primary-bg": "var(--color-btn-primary-bg)",
+          "primary-text": "var(--color-btn-primary-text)",
+          "secondary-border": "var(--color-btn-secondary-border)",
+          "secondary-text": "var(--color-btn-secondary-text)",
+          "disabled-bg": "var(--color-btn-disabled-bg)",
+          "disabled-text": "var(--color-btn-disabled-text)",
         },
         accent: {
-          cyan: "#06b6d4",
-          purple: "#a855f7",
-          pink: "#ec4899",
-          emerald: "#10b981",
-          amber: "#f59e0b",
+          DEFAULT: "var(--color-accent)",
+          soft: "var(--color-accent-soft)",
+        },
+        highlight: {
+          DEFAULT: "var(--color-highlight)",
+        },
+        canvas: {
+          bg: "var(--color-bg)",
+          surface: "var(--color-surface)",
+          elevated: "var(--color-surface-elevated)",
+        },
+        border: {
+          DEFAULT: "var(--color-border)",
+          strong: "var(--color-border-strong)",
+        },
+        ink: {
+          primary: "var(--color-text-primary)",
+          secondary: "var(--color-text-secondary)",
+          muted: "var(--color-text-muted)",
+        },
+        semantic: {
+          success: "var(--color-success)",
+          warning: "var(--color-warning)",
+          error: "var(--color-error)",
+          info: "var(--color-info)",
+        },
+        // Subject Router Accents
+        subject: {
+          math: {
+            DEFAULT: "#0056D2",
+            surface: "#E9F1FC",
+          },
+          bio: {
+            DEFAULT: "#0F7B3F",
+            surface: "#E6F4EA",
+          },
+          history: {
+            DEFAULT: "#B75F00",
+            surface: "#FFF1E6",
+          },
+          cs: {
+            DEFAULT: "#0056D2",
+            surface: "#E9F1FC",
+          },
+        },
+        // Backwards compatibility mappings
+        brand: {
+          50: "#E9F1FC",
+          100: "#CFE2FA",
+          200: "#9FC5F5",
+          300: "#6FA8F0",
+          400: "#3F8BEB",
+          500: "#0056D2",
+          600: "#00419E",
+          700: "#002D6B",
+          800: "#001838",
+          900: "#000000",
+          950: "#000000",
         },
       },
-      backgroundImage: {
-        "glass-gradient": "linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02))",
-        "card-glow": "radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15), transparent 70%)",
-      },
-      animation: {
-        "pulse-slow": "pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        "float": "float 6s ease-in-out infinite",
-      },
-      keyframes: {
-        float: {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-8px)" },
-        },
-      }
     },
   },
   plugins: [
@@ -55,26 +99,23 @@ const config: Config = {
   daisyui: {
     themes: [
       {
-        sahayakDark: {
-          "primary": "#6366f1",
-          "secondary": "#06b6d4",
-          "accent": "#a855f7",
-          "neutral": "#1e293b",
-          "base-100": "#090d16",
-          "base-200": "#0f172a",
-          "base-300": "#1e293b",
-          "info": "#38bdf8",
-          "success": "#10b981",
-          "warning": "#f59e0b",
-          "error": "#f43f5e",
+        courseraLight: {
+          "primary": "#0056D2",
+          "secondary": "#000000",
+          "accent": "#F97316",
+          "neutral": "#1F1F1F",
+          "base-100": "#FFFFFF",
+          "base-200": "#FFFFFF",
+          "base-300": "#F8FAFC",
+          "info": "#0056D2",
+          "success": "#0F7B3F",
+          "warning": "#B75F00",
+          "error": "#C21E1E",
         },
       },
-      "dark",
-      "night",
-      "dim"
+      "light",
     ],
-    defaultTheme: "sahayakDark",
-    darkTheme: "sahayakDark",
+    defaultTheme: "courseraLight",
     base: true,
     styled: true,
     utils: true,
