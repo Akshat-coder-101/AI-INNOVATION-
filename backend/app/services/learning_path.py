@@ -493,18 +493,18 @@ JSON output schema:
         if not db_path or not db_path.dag_json:
             return await cls.generate_or_get_learning_path(topic_id, user_id, db)
 
-        data = dict(db_path.dag_json) if isinstance(db_path.dag_json, dict) else {}
-        nodes = data.get("nodes", [])
+        data: Dict[str, Any] = dict(db_path.dag_json) if isinstance(db_path.dag_json, dict) else {}
+        nodes: List[Dict[str, Any]] = list(data.get("nodes", []))
         for n in nodes:
             if isinstance(n, dict) and n.get("id") == node_id:
-                n["completed"] = not n.get("completed", False)
+                n["completed"] = not bool(n.get("completed", False))
                 if n["completed"] and not n.get("score"):
                     n["score"] = recent_score
                 elif not n["completed"]:
                     n["score"] = None
                 break
 
-        completed_count = sum(1 for n in nodes if isinstance(n, dict) and n.get("completed", False))
+        completed_count = sum(1 for n in nodes if isinstance(n, dict) and bool(n.get("completed", False)))
         pct = round((completed_count / len(nodes)) * 100, 1) if nodes else 0.0
         data["completion_percentage"] = pct
         

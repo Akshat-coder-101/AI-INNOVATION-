@@ -2,7 +2,7 @@ import uuid
 import logging
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from ..database import DBLessonSession, DBMaterial, DBMaterialChunk, DBLearnerProfile
+from ..database import DBLessonSession, DBMaterial, DBLearnerProfile
 from ..models.schemas import (
     LessonPlan, 
     LessonSegmentPlan, 
@@ -11,9 +11,7 @@ from ..models.schemas import (
     LessonSegmentRender, 
     CaptionItem, 
     Citation, 
-    LearnerProfileCreate,
-    PathNode,
-    LearningPath
+    LearnerProfileCreate
 )
 from ..services.rag import RAGService
 from ..services.visual_router import VisualRouter
