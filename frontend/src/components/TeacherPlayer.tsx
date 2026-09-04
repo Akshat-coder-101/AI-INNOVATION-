@@ -76,6 +76,7 @@ export default function TeacherPlayer({
   const [streamedText, setStreamedText] = useState<string>("");
 
   const [playerViewMode, setPlayerViewMode] = useState<"theater" | "split">("theater");
+  const [mediaDisplayMode, setMediaDisplayMode] = useState<"avatar" | "video">("avatar");
   const [isTranscriptExpanded, setIsTranscriptExpanded] = useState<boolean>(false);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
 
@@ -580,8 +581,8 @@ export default function TeacherPlayer({
             <div className="space-y-6">
               {/* Large Screen Video Viewport */}
               <div className="relative rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950 w-full aspect-video sm:max-h-[480px] shadow-2xl flex flex-col justify-between group transition-all">
-                {/* Media Element */}
-                {segment.video_url ? (
+                {/* Media Element: Avatar Studio vs Video */}
+                {mediaDisplayMode === "video" && segment.video_url ? (
                   <>
                     <video
                       ref={videoRef}
@@ -611,28 +612,20 @@ export default function TeacherPlayer({
 
                     {/* Picture-in-Picture Talking Presenter in corner */}
                     <div className="absolute right-4 bottom-16 z-30 pointer-events-none hidden sm:block">
-                      <div className="bg-black/75 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 shadow-2xl scale-90 origin-bottom-right">
+                      <div className="bg-black/80 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 shadow-2xl scale-90 origin-bottom-right">
                         <AudioReactiveAvatar
+                          audioRef={audioRef}
                           isPlaying={isPlaying}
                           isFallbackSpeaking={isPlaying}
-                          size={75}
+                          size={70}
                           name="Prof. Sahayak"
                           subtitle="Presenter"
                         />
                       </div>
                     </div>
                   </>
-                ) : segment.avatar_video_url ? (
-                  <video
-                    ref={videoRef}
-                    src={segment.avatar_video_url}
-                    playsInline
-                    preload="auto"
-                    muted={isMuted}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
                 ) : (
-                  /* Virtual Teacher Studio (Audio-Reactive Presenter) */
+                  /* Virtual Teacher Studio (Photorealistic Presenter with Pulsing Ring & Waveform) */
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-neutral-900 via-neutral-950 to-black p-4">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent pointer-events-none" />
 
@@ -641,7 +634,7 @@ export default function TeacherPlayer({
                         audioRef={audioRef}
                         isPlaying={isPlaying}
                         isFallbackSpeaking={!segment.audio_url && isPlaying}
-                        size={145}
+                        size={140}
                         name="Prof. Sahayak AI"
                         subtitle={
                           activeLanguage === "hi"
@@ -666,18 +659,30 @@ export default function TeacherPlayer({
                 {/* Top Status & Controls Overlay */}
                 <div className="relative z-20 flex items-center justify-between p-3 sm:p-4 bg-gradient-to-b from-black/80 via-black/30 to-transparent">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-white font-mono font-bold border border-white/20 flex items-center gap-1.5 shadow-md">
+                    <span className="text-[10px] sm:text-xs px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-md text-white font-mono font-bold border border-white/20 flex items-center gap-1.5 shadow-md">
                       <span className={`w-2 h-2 rounded-full ${isPlaying ? "bg-emerald-400 animate-pulse" : "bg-neutral-500"}`}></span>
-                      {segment.video_url ? "Animated Video Active" : segment.audio_url ? "Neural Voice Active" : "AI Teacher Synced"}
+                      AI Teacher Synced
                     </span>
                     {segment.is_reteach && (
-                      <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-accent/90 backdrop-blur-md text-white font-mono font-bold animate-pulse shadow-md">
+                      <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-md bg-accent/90 backdrop-blur-md text-white font-mono font-bold animate-pulse shadow-md">
                         Adaptive Reteach
                       </span>
                     )}
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* Mode Toggle Button if video is available */}
+                    {segment.video_url && (
+                      <button
+                        onClick={() => setMediaDisplayMode(mediaDisplayMode === "avatar" ? "video" : "avatar")}
+                        className="px-2.5 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                        title={mediaDisplayMode === "avatar" ? "Watch video lecture" : "Switch to Teacher Avatar Studio"}
+                      >
+                        <Tv className="w-3.5 h-3.5 text-highlight" />
+                        <span>{mediaDisplayMode === "avatar" ? "Watch Video Lecture" : "Show Teacher Studio"}</span>
+                      </button>
+                    )}
+
                     {/* Speed Selector */}
                     <div className="flex items-center bg-black/70 backdrop-blur-md rounded-md p-0.5 border border-white/20 text-[10px] font-mono font-bold text-white">
                       {[1.0, 1.25, 1.5].map((rate) => (
@@ -733,10 +738,10 @@ export default function TeacherPlayer({
                   </div>
 
                   <div className="flex items-center justify-between text-white">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
                       <button
                         onClick={() => setIsPlaying(!isPlaying)}
-                        className="w-9 h-9 rounded-full bg-primary hover:bg-primary-hover text-white flex items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95"
+                        className="w-9 h-9 rounded-lg bg-primary hover:bg-primary-hover text-white flex items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95"
                         title={isPlaying ? "Pause Lecture" : "Play Lecture"}
                       >
                         {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
@@ -744,7 +749,7 @@ export default function TeacherPlayer({
 
                       <button
                         onClick={() => handleSkip(-10)}
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs"
+                        className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center transition-colors text-xs"
                         title="Rewind 10 seconds"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
@@ -752,7 +757,7 @@ export default function TeacherPlayer({
 
                       <button
                         onClick={() => handleSkip(10)}
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs"
+                        className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center transition-colors text-xs"
                         title="Skip forward 10 seconds"
                       >
                         <RotateCw className="w-3.5 h-3.5" />
@@ -760,13 +765,14 @@ export default function TeacherPlayer({
 
                       <button
                         onClick={() => setIsMuted(!isMuted)}
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-xs ml-1"
+                        className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center transition-colors text-xs ml-0.5"
                         title={isMuted ? "Unmute" : "Mute"}
                       >
                         {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5" />}
                       </button>
 
-                      <div className="hidden sm:flex items-center gap-1.5 text-xs text-neutral-300 font-mono font-semibold ml-2">
+                      <div className="flex items-center gap-1.5 text-xs text-neutral-300 font-mono font-semibold ml-2">
+                        <Clock className="w-3.5 h-3.5 text-neutral-400" />
                         <span>{Math.floor(progressSec)}s</span>
                         <span className="text-neutral-500">/</span>
                         <span>{durationSec}s</span>
@@ -967,8 +973,8 @@ export default function TeacherPlayer({
               {/* Left Column: Video + Transcript */}
               <div className="lg:col-span-6 flex flex-col space-y-4">
                 {/* Video Viewport */}
-                <div className="relative rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950 aspect-video w-full shadow-xl flex flex-col justify-between group">
-                  {segment.video_url ? (
+                <div className="relative rounded-xl overflow-hidden border border-neutral-800 bg-neutral-950 aspect-video flex flex-col justify-between group shadow-lg">
+                  {mediaDisplayMode === "video" && segment.video_url ? (
                     <video
                       ref={videoRef}
                       src={segment.video_url.startsWith("http") ? segment.video_url : `${apiBaseUrl}${segment.video_url}`}
@@ -994,15 +1000,6 @@ export default function TeacherPlayer({
                         setIsPausedForCheckpoint(true);
                       }}
                     />
-                  ) : segment.avatar_video_url ? (
-                    <video
-                      ref={videoRef}
-                      src={segment.avatar_video_url}
-                      playsInline
-                      preload="auto"
-                      muted={isMuted}
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-neutral-900 via-neutral-950 to-black p-4">
                       <AudioReactiveAvatar
@@ -1024,42 +1021,56 @@ export default function TeacherPlayer({
 
                   {/* Top Status Overlay */}
                   <div className="relative z-20 flex items-center justify-between p-3 bg-gradient-to-b from-black/80 to-transparent">
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white font-mono font-bold border border-white/20 flex items-center gap-1.5 shadow-md">
+                    <span className="text-[10px] px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-md text-white font-mono font-bold border border-white/20 flex items-center gap-1.5 shadow-md">
                       <span className={`w-2 h-2 rounded-full ${isPlaying ? "bg-emerald-400 animate-pulse" : "bg-neutral-500"}`}></span>
-                      {segment.video_url ? "Video Active" : segment.audio_url ? "Neural Voice" : "AI Synced"}
+                      AI Teacher Synced
                     </span>
-                    <button
-                      onClick={() => setPlayerViewMode("theater")}
-                      className="p-1 rounded bg-black/70 text-white border border-white/20 text-xs flex items-center gap-1"
-                      title="Switch to Large Screen Theater"
-                    >
-                      <Maximize2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {segment.video_url && (
+                        <button
+                          onClick={() => setMediaDisplayMode(mediaDisplayMode === "avatar" ? "video" : "avatar")}
+                          className="px-2 py-0.5 rounded bg-primary text-white text-[10px] font-bold shadow-xs active:scale-95"
+                          title="Toggle Video vs Avatar Studio"
+                        >
+                          {mediaDisplayMode === "avatar" ? "Video" : "Avatar"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setPlayerViewMode("theater")}
+                        className="p-1 rounded bg-black/70 text-white border border-white/20 text-xs flex items-center gap-1"
+                        title="Switch to Large Screen Theater"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Bottom Controls */}
                   <div className="relative z-20 p-3 bg-gradient-to-t from-black/95 to-transparent flex items-center justify-between text-white">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => setIsPlaying(!isPlaying)}
-                        className="w-8 h-8 rounded-full bg-primary hover:bg-primary-hover text-white flex items-center justify-center"
+                        className="w-8 h-8 rounded-lg bg-primary hover:bg-primary-hover text-white flex items-center justify-center shadow-xs"
                       >
                         {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
                       </button>
                       <button
                         onClick={() => handleSkip(-10)}
-                        className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                        className="w-7 h-7 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center text-xs"
                       >
                         <RotateCcw className="w-3 h-3" />
                       </button>
                       <button
                         onClick={() => setIsMuted(!isMuted)}
-                        className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                        className="w-7 h-7 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center text-xs"
                       >
                         {isMuted ? <VolumeX className="w-3 h-3 text-rose-400" /> : <Volume2 className="w-3 h-3" />}
                       </button>
                     </div>
-                    <span className="text-[11px] font-mono">{Math.floor(progressSec)}s / {durationSec}s</span>
+                    <div className="flex items-center gap-1 text-[11px] font-mono text-neutral-300">
+                      <Clock className="w-3 h-3 text-neutral-400" />
+                      <span>{Math.floor(progressSec)}s / {durationSec}s</span>
+                    </div>
                   </div>
                 </div>
 

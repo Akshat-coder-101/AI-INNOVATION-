@@ -17,9 +17,8 @@ export default function AudioReactiveAvatar({
   isFallbackSpeaking = false,
   size = 140,
   name = "Prof. Sahayak AI",
-  subtitle = "Adaptive Lecture Presenter",
+  subtitle = "Adaptive Lecture Studio",
 }: AudioReactiveAvatarProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -78,216 +77,37 @@ export default function AudioReactiveAvatar({
     };
   }, [audioRef, isPlaying]);
 
-  // Main Canvas Render Loop
+  // Analyze audio frequency or simulate voice wave
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let blinkTimer = 0;
-    let isBlinking = false;
     let fallbackPhase = 0;
 
-    const render = () => {
-      let currentAmp = 0;
-
+    const checkAudio = () => {
       if (isPlaying) {
         if (analyserRef.current) {
           const bufferLength = analyserRef.current.frequencyBinCount;
           const dataArray = new Uint8Array(bufferLength);
           analyserRef.current.getByteFrequencyData(dataArray);
 
-          // Calculate average energy in voice frequency range (index 4 to 32)
           let sum = 0;
           const range = Math.min(32, bufferLength);
           for (let i = 4; i < range; i++) {
             sum += dataArray[i];
           }
-          currentAmp = Math.min(1.0, (sum / (range - 4)) / 140);
+          const amp = Math.min(1.0, (sum / (range - 4)) / 130);
+          setAmplitude(amp);
         } else if (isFallbackSpeaking || isPlaying) {
-          // Simulated phoneme oscillation for speech synthesis fallback
           fallbackPhase += 0.22;
           const wave = (Math.sin(fallbackPhase) + Math.cos(fallbackPhase * 2.3) + 1.5) / 3.5;
-          currentAmp = 0.2 + (wave * 0.65);
+          setAmplitude(0.25 + wave * 0.65);
         }
       } else {
-        currentAmp = 0;
+        setAmplitude(0);
       }
 
-      setAmplitude(currentAmp);
-
-      // Blinking timer logic
-      blinkTimer += 1;
-      if (blinkTimer > 180) {
-        isBlinking = true;
-        if (blinkTimer > 192) {
-          isBlinking = false;
-          blinkTimer = 0;
-        }
-      }
-
-      // Draw avatar on canvas
-      const w = canvas.width;
-      const h = canvas.height;
-      const cx = w / 2;
-      const cy = h / 2 - 4;
-
-      ctx.clearRect(0, 0, w, h);
-
-      // 1. Audio-reactive pulsating outer aura rings
-      if (currentAmp > 0.05) {
-        const auraRadius = (w * 0.44) + (currentAmp * 16);
-        const auraGrad = ctx.createRadialGradient(cx, cy, w * 0.3, cx, cy, auraRadius);
-        auraGrad.addColorStop(0, "rgba(99, 102, 241, 0.4)");
-        auraGrad.addColorStop(0.7, "rgba(56, 189, 248, 0.2)");
-        auraGrad.addColorStop(1, "rgba(99, 102, 241, 0)");
-
-        ctx.fillStyle = auraGrad;
-        ctx.beginPath();
-        ctx.arc(cx, cy, auraRadius, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // 2. Base Border Ring
-      ctx.beginPath();
-      ctx.arc(cx, cy, w * 0.44, 0, Math.PI * 2);
-      ctx.fillStyle = "#0f172a";
-      ctx.fill();
-      ctx.lineWidth = currentAmp > 0.1 ? 3.5 : 2.5;
-      ctx.strokeStyle = currentAmp > 0.1 ? "#6366f1" : "#334155";
-      ctx.stroke();
-
-      // 3. Torso / Collar
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, w * 0.43, 0, Math.PI * 2);
-      ctx.clip();
-
-      // Dark Academic Blazer
-      ctx.fillStyle = "#1e293b";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + (h * 0.44), w * 0.42, h * 0.3, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Shirt / Neck tie
-      ctx.fillStyle = "#38bdf8";
-      ctx.beginPath();
-      ctx.moveTo(cx - 16, cy + (h * 0.28));
-      ctx.lineTo(cx + 16, cy + (h * 0.28));
-      ctx.lineTo(cx, cy + (h * 0.46));
-      ctx.closePath();
-      ctx.fill();
-
-      // Neck
-      ctx.fillStyle = "#fed7aa";
-      ctx.fillRect(cx - 14, cy + (h * 0.14), 28, 26);
-
-      // 4. Head / Face Shape
-      const headRadiusX = w * 0.25;
-      const headRadiusY = h * 0.28;
-      const faceGrad = ctx.createLinearGradient(cx - headRadiusX, cy - headRadiusY, cx + headRadiusX, cy + headRadiusY);
-      faceGrad.addColorStop(0, "#ffedd5");
-      faceGrad.addColorStop(1, "#fed7aa");
-
-      ctx.fillStyle = faceGrad;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, headRadiusX, headRadiusY, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 5. Stylized Hair
-      ctx.fillStyle = "#1e1b4b";
-      ctx.beginPath();
-      ctx.arc(cx, cy - (headRadiusY * 0.4), headRadiusX * 1.06, Math.PI, 0, false);
-      ctx.fill();
-
-      // 6. Eyes (with blinking)
-      const eyeOffsetX = 18;
-      const eyeY = cy - 4;
-
-      if (isBlinking) {
-        // Closed eye line
-        ctx.strokeStyle = "#334155";
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(cx - eyeOffsetX - 7, eyeY);
-        ctx.lineTo(cx - eyeOffsetX + 7, eyeY);
-        ctx.moveTo(cx + eyeOffsetX - 7, eyeY);
-        ctx.lineTo(cx + eyeOffsetX + 7, eyeY);
-        ctx.stroke();
-      } else {
-        // Open eyes with sparkle
-        ctx.fillStyle = "#0f172a";
-        ctx.beginPath();
-        ctx.ellipse(cx - eyeOffsetX, eyeY, 5.5, 6, 0, 0, Math.PI * 2);
-        ctx.ellipse(cx + eyeOffsetX, eyeY, 5.5, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Eye highlights
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(cx - eyeOffsetX - 1.5, eyeY - 2, 2, 0, Math.PI * 2);
-        ctx.arc(cx + eyeOffsetX - 1.5, eyeY - 2, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // 7. Academic Glasses
-      ctx.strokeStyle = "#4338ca";
-      ctx.lineWidth = 2.2;
-      // Left rim
-      ctx.beginPath();
-      ctx.roundRect(cx - eyeOffsetX - 11, eyeY - 9, 22, 17, [4]);
-      ctx.stroke();
-      // Right rim
-      ctx.beginPath();
-      ctx.roundRect(cx + eyeOffsetX - 11, eyeY - 9, 22, 17, [4]);
-      ctx.stroke();
-      // Bridge
-      ctx.beginPath();
-      ctx.moveTo(cx - eyeOffsetX + 11, eyeY);
-      ctx.lineTo(cx + eyeOffsetX - 11, eyeY);
-      ctx.stroke();
-
-      // 8. Dynamic Audio-Reactive Mouth
-      const mouthY = cy + (headRadiusY * 0.48);
-      const mouthWidth = 14 + (currentAmp * 12);
-      const mouthHeight = Math.max(2, currentAmp * 18);
-
-      if (currentAmp > 0.08) {
-        // Open talking mouth with inner oral cavity & teeth
-        ctx.fillStyle = "#881337";
-        ctx.beginPath();
-        ctx.ellipse(cx, mouthY, mouthWidth, mouthHeight, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Upper teeth
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.roundRect(cx - (mouthWidth * 0.65), mouthY - mouthHeight, mouthWidth * 1.3, Math.min(5, mouthHeight), [2]);
-        ctx.fill();
-
-        // Tongue highlight
-        if (mouthHeight > 6) {
-          ctx.fillStyle = "#f43f5e";
-          ctx.beginPath();
-          ctx.ellipse(cx, mouthY + (mouthHeight * 0.4), mouthWidth * 0.5, mouthHeight * 0.45, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else {
-        // Resting gentle smile
-        ctx.strokeStyle = "#991b1b";
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(cx, mouthY - 4, 11, 0.2 * Math.PI, 0.8 * Math.PI, false);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-
-      animFrameRef.current = requestAnimationFrame(render);
+      animFrameRef.current = requestAnimationFrame(checkAudio);
     };
 
-    render();
+    animFrameRef.current = requestAnimationFrame(checkAudio);
 
     return () => {
       if (animFrameRef.current) {
@@ -296,44 +116,82 @@ export default function AudioReactiveAvatar({
     };
   }, [isPlaying, isFallbackSpeaking]);
 
+  const activeGlow = isPlaying ? Math.max(0.4, amplitude) : 0;
+
   return (
-    <div className="flex flex-col items-center text-center">
-      <div className="relative">
-        <canvas
-          ref={canvasRef}
-          width={size}
-          height={size}
-          className="rounded-full shadow-2xl transition-transform duration-300 hover:scale-105"
+    <div className="flex flex-col items-center text-center select-none">
+      {/* Outer Glow Halo & Circular Portrait */}
+      <div 
+        className="relative rounded-full transition-all duration-300 flex items-center justify-center"
+        style={{
+          width: size,
+          height: size,
+          boxShadow: isPlaying 
+            ? `0 0 ${25 + activeGlow * 30}px rgba(0, 86, 210, ${0.4 + activeGlow * 0.4}), 0 0 ${45 + activeGlow * 20}px rgba(235, 110, 39, ${0.3 + activeGlow * 0.3})`
+            : "none"
+        }}
+      >
+        {/* Pulsing ring */}
+        <div 
+          className={`absolute -inset-1.5 rounded-full transition-all duration-300 ${
+            isPlaying 
+              ? "bg-gradient-to-tr from-primary via-accent to-highlight opacity-90 animate-pulse" 
+              : "border-2 border-neutral-700 bg-neutral-800"
+          }`}
+          style={{
+            transform: isPlaying ? `scale(${1.0 + activeGlow * 0.08})` : "scale(1)"
+          }}
         />
 
-        {/* Live Speaking Badge */}
-        {isPlaying && (
-          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-emerald-500/90 text-white font-mono text-[9px] font-bold shadow-md border border-white/20 flex items-center gap-1 animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-            <span>Speaking</span>
-          </div>
-        )}
+        {/* Photorealistic Teacher Portrait */}
+        <div 
+          className="relative w-full h-full rounded-full overflow-hidden border-2 border-neutral-900 bg-neutral-900 z-10"
+        >
+          <img
+            src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=400&auto=format&fit=crop"
+            alt={name}
+            className="w-full h-full object-cover object-center"
+          />
+        </div>
       </div>
 
-      <span className="text-white text-sm font-bold tracking-wide mt-3">
-        {name}
-      </span>
-      <span className="text-neutral-400 text-xs font-mono mt-0.5">
-        {subtitle}
-      </span>
+      {/* Teacher Name & Subtitle */}
+      {size >= 100 && (
+        <div className="mt-3 space-y-0.5 z-10">
+          <h4 className="text-white text-sm font-bold tracking-wide flex items-center justify-center gap-1.5 drop-shadow-sm">
+            <span>{name}</span>
+          </h4>
+          {subtitle && (
+            <p className="text-neutral-400 text-xs font-mono">
+              {subtitle}
+            </p>
+          )}
+        </div>
+      )}
 
-      {/* Audio Reactive Frequency Bars */}
-      {isPlaying && (
-        <div className="flex items-center gap-1 mt-2.5 h-5">
-          {[0.4, 0.8, 1.2, 0.7, 1.0, 0.5].map((delay, i) => (
-            <span
-              key={i}
-              className="w-1 bg-gradient-to-t from-primary to-accent rounded-full transition-all duration-75"
-              style={{
-                height: `${Math.max(4, Math.min(20, (amplitude * 24 * (0.6 + (i * 0.15)))))}px`,
-              }}
-            />
-          ))}
+      {/* Bouncing Audio Waveform Equalizer */}
+      {isPlaying && size >= 80 && (
+        <div className="flex items-center gap-1 mt-2.5 z-10">
+          <span 
+            className="w-1.5 bg-accent rounded-full animate-bounce transition-all duration-150"
+            style={{ height: `${8 + activeGlow * 14}px` }}
+          />
+          <span 
+            className="w-1.5 bg-highlight rounded-full animate-bounce [animation-delay:0.15s] transition-all duration-150"
+            style={{ height: `${14 + activeGlow * 18}px` }}
+          />
+          <span 
+            className="w-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.3s] transition-all duration-150"
+            style={{ height: `${20 + activeGlow * 20}px` }}
+          />
+          <span 
+            className="w-1.5 bg-accent rounded-full animate-bounce [animation-delay:0.45s] transition-all duration-150"
+            style={{ height: `${12 + activeGlow * 16}px` }}
+          />
+          <span 
+            className="w-1.5 bg-highlight rounded-full animate-bounce [animation-delay:0.6s] transition-all duration-150"
+            style={{ height: `${7 + activeGlow * 10}px` }}
+          />
         </div>
       )}
     </div>
