@@ -169,11 +169,11 @@ stateDiagram-v2
 [Final Multi-Scene H.264 MP4 Explainer Video]
 ```
 
-### Browser-Side Audio-Reactive Presenter:
-* Real-time client-side avatar rendered with HTML5 Canvas.
-* Utilizes Web Audio API `AnalyserNode` to calculate real-time RMS speech amplitude.
-* Dynamically articulates mouth opening, teeth aperture, and facial expressions in exact sync with voice playback.
-* Ambient pulsating soundwave halo rings react to frequency changes.
+### Browser-Side Audio-Reactive Presenter & AI Teacher Studio:
+* **Photorealistic AI Teacher Studio**: Interactive studio presentation environment with multi-tier ambient backdrops, neon status indicators, and pulsating audio-responsive glow rings.
+* **Real-Time Voice Equalizer**: Dynamic multi-band frequency spectrum visualizer reacting directly to speech playback via the Web Audio API `AnalyserNode`.
+* **Adaptive Display Toggle**: Seamlessly switch between the **AI Teacher Studio** and generated **Lecture Explainer Video** within both Theater and Split views without interrupting voice or lesson progress.
+* **Canvas Fallback Articulation**: Real-time mouth articulation, eye blinking, and speech amplitude reactivity for lightweight low-bandwidth devices.
 
 ---
 
@@ -226,10 +226,14 @@ cd AI-INNOVATION-
 ```
 
 ### Step 2: Configure Environment
-Copy `.env.example` to `.env` (backend) and `frontend/.env.local`:
+Copy the `.env.example` templates to `.env` (root or `backend/.env`) and `frontend/.env.local`:
 ```bash
+# Root & Backend:
 cp .env.example .env
-cp .env.example frontend/.env.local
+cp backend/.env.example backend/.env
+
+# Frontend:
+cp frontend/.env.example frontend/.env.local
 ```
 
 ### Step 3: Start Backend (FastAPI)
