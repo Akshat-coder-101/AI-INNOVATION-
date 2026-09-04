@@ -121,9 +121,12 @@ export default function TeacherPlayer({
     }
   }, [initialSegment]);
 
-  // Handle Real Audio playback vs Web Speech fallback
+  // Handle Video / Audio playback vs Web Speech fallback
   useEffect(() => {
     if (!isPlaying) {
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
       if (audioRef.current && !audioRef.current.paused) {
         audioRef.current.pause();
       }
@@ -133,15 +136,24 @@ export default function TeacherPlayer({
       return;
     }
 
-    // If real ElevenLabs audio URL exists
-    if (segment.audio_url) {
+    // When Playing:
+    if (segment.video_url && videoRef.current) {
+      if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+      }
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
-      if (audioRef.current) {
-        audioRef.current.muted = isMuted;
-        audioRef.current.play().catch((e) => console.log("Audio autoplay prevented:", e));
+      videoRef.current.playbackRate = playbackRate;
+      videoRef.current.muted = isMuted;
+      videoRef.current.play().catch((e) => console.log("Video playback caught/autoplay blocked:", e));
+    } else if (segment.audio_url && audioRef.current) {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
       }
+      audioRef.current.playbackRate = playbackRate;
+      audioRef.current.muted = isMuted;
+      audioRef.current.play().catch((e) => console.log("Audio autoplay prevented:", e));
     } else {
       // Fallback: Web Speech API (with stateful resume)
       if (typeof window !== "undefined" && "speechSynthesis" in window && !isMuted && activeTab === "interactive") {
@@ -150,7 +162,7 @@ export default function TeacherPlayer({
         } else if (!window.speechSynthesis.speaking) {
           window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance(segment.spoken_script);
-          utterance.rate = 1.0;
+          utterance.rate = playbackRate;
           utterance.lang = activeLanguage === "hi" ? "hi-IN" : "en-US";
           utterance.onend = () => {
             setIsPlaying(false);
@@ -160,7 +172,13 @@ export default function TeacherPlayer({
         }
       }
     }
-  }, [isPlaying, isMuted, segment, activeLanguage, activeTab]);
+  }, [isPlaying, isMuted, playbackRate, segment.video_url, segment.audio_url, segment.spoken_script, activeLanguage, activeTab]);
+
+  // Sync mute state to media elements
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = isMuted;
+    if (audioRef.current) audioRef.current.muted = isMuted;
+  }, [isMuted]);
 
   // Clean speech synthesis on unmount
   useEffect(() => {
@@ -445,8 +463,8 @@ export default function TeacherPlayer({
 
   return (
     <div className="space-y-4">
-      {/* Hidden real HTML5 audio element when ElevenLabs audio_url is present */}
-      {segment.audio_url && (
+      {/* Hidden real HTML5 audio element when audio_url is present without video */}
+      {segment.audio_url && !segment.video_url && (
         <audio
           ref={audioRef}
           src={segment.audio_url.startsWith("http") ? segment.audio_url : `${apiBaseUrl}${segment.audio_url}`}
@@ -564,27 +582,52 @@ export default function TeacherPlayer({
               <div className="relative rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950 w-full aspect-video sm:max-h-[480px] shadow-2xl flex flex-col justify-between group transition-all">
                 {/* Media Element */}
                 {segment.video_url ? (
-                  <video
-                    ref={videoRef}
-                    src={segment.video_url.startsWith("http") ? segment.video_url : `${apiBaseUrl}${segment.video_url}`}
-                    playsInline
-                    autoPlay={isPlaying}
-                    muted={isMuted}
-                    className="absolute inset-0 w-full h-full object-contain bg-black"
-                    onTimeUpdate={() => {
-                      if (videoRef.current) setProgressSec(videoRef.current.currentTime);
-                    }}
-                    onEnded={() => {
-                      setIsPlaying(false);
-                      setIsPausedForCheckpoint(true);
-                    }}
-                  />
+                  <>
+                    <video
+                      ref={videoRef}
+                      src={segment.video_url.startsWith("http") ? segment.video_url : `${apiBaseUrl}${segment.video_url}`}
+                      playsInline
+                      preload="auto"
+                      muted={isMuted}
+                      className="absolute inset-0 w-full h-full object-contain bg-black cursor-pointer"
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      onLoadedMetadata={(e) => {
+                        const vid = e.currentTarget;
+                        if (vid.duration && !isNaN(vid.duration) && vid.duration > 1) {
+                          setDurationSec(Math.ceil(vid.duration));
+                        }
+                        if (vid.currentTime === 0) {
+                          vid.currentTime = 0.05;
+                        }
+                      }}
+                      onTimeUpdate={() => {
+                        if (videoRef.current) setProgressSec(videoRef.current.currentTime);
+                      }}
+                      onEnded={() => {
+                        setIsPlaying(false);
+                        setIsPausedForCheckpoint(true);
+                      }}
+                    />
+
+                    {/* Picture-in-Picture Talking Presenter in corner */}
+                    <div className="absolute right-4 bottom-16 z-30 pointer-events-none hidden sm:block">
+                      <div className="bg-black/75 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 shadow-2xl scale-90 origin-bottom-right">
+                        <AudioReactiveAvatar
+                          isPlaying={isPlaying}
+                          isFallbackSpeaking={isPlaying}
+                          size={75}
+                          name="Prof. Sahayak"
+                          subtitle="Presenter"
+                        />
+                      </div>
+                    </div>
+                  </>
                 ) : segment.avatar_video_url ? (
                   <video
                     ref={videoRef}
                     src={segment.avatar_video_url}
                     playsInline
-                    autoPlay={isPlaying}
+                    preload="auto"
                     muted={isMuted}
                     className="absolute inset-0 w-full h-full object-cover"
                   />
@@ -625,7 +668,7 @@ export default function TeacherPlayer({
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-white font-mono font-bold border border-white/20 flex items-center gap-1.5 shadow-md">
                       <span className={`w-2 h-2 rounded-full ${isPlaying ? "bg-emerald-400 animate-pulse" : "bg-neutral-500"}`}></span>
-                      {segment.audio_url ? "ElevenLabs Voice" : "AI Teacher Synced"}
+                      {segment.video_url ? "Animated Video Active" : segment.audio_url ? "Neural Voice Active" : "AI Teacher Synced"}
                     </span>
                     {segment.is_reteach && (
                       <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-accent/90 backdrop-blur-md text-white font-mono font-bold animate-pulse shadow-md">
@@ -930,9 +973,19 @@ export default function TeacherPlayer({
                       ref={videoRef}
                       src={segment.video_url.startsWith("http") ? segment.video_url : `${apiBaseUrl}${segment.video_url}`}
                       playsInline
-                      autoPlay={isPlaying}
+                      preload="auto"
                       muted={isMuted}
-                      className="absolute inset-0 w-full h-full object-contain bg-black"
+                      className="absolute inset-0 w-full h-full object-contain bg-black cursor-pointer"
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      onLoadedMetadata={(e) => {
+                        const vid = e.currentTarget;
+                        if (vid.duration && !isNaN(vid.duration) && vid.duration > 1) {
+                          setDurationSec(Math.ceil(vid.duration));
+                        }
+                        if (vid.currentTime === 0) {
+                          vid.currentTime = 0.05;
+                        }
+                      }}
                       onTimeUpdate={() => {
                         if (videoRef.current) setProgressSec(videoRef.current.currentTime);
                       }}
@@ -946,7 +999,7 @@ export default function TeacherPlayer({
                       ref={videoRef}
                       src={segment.avatar_video_url}
                       playsInline
-                      autoPlay={isPlaying}
+                      preload="auto"
                       muted={isMuted}
                       className="absolute inset-0 w-full h-full object-cover"
                     />
@@ -958,15 +1011,22 @@ export default function TeacherPlayer({
                         isFallbackSpeaking={!segment.audio_url && isPlaying}
                         size={110}
                         name="Prof. Sahayak"
-                        subtitle="Adaptive Presenter"
+                        subtitle={
+                          activeLanguage === "hi"
+                            ? "अध्यापन सत्र (Hindi)"
+                            : activeLanguage === "hinglish"
+                            ? "Interactive Hinglish Session"
+                            : "Lecture Mode"
+                        }
                       />
                     </div>
                   )}
 
-                  {/* Top Bar */}
+                  {/* Top Status Overlay */}
                   <div className="relative z-20 flex items-center justify-between p-3 bg-gradient-to-b from-black/80 to-transparent">
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-black/70 text-white font-mono font-bold border border-white/20">
-                      AI Teacher Synced
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white font-mono font-bold border border-white/20 flex items-center gap-1.5 shadow-md">
+                      <span className={`w-2 h-2 rounded-full ${isPlaying ? "bg-emerald-400 animate-pulse" : "bg-neutral-500"}`}></span>
+                      {segment.video_url ? "Video Active" : segment.audio_url ? "Neural Voice" : "AI Synced"}
                     </span>
                     <button
                       onClick={() => setPlayerViewMode("theater")}
