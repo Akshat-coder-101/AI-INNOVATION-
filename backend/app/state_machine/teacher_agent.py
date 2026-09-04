@@ -352,8 +352,8 @@ Output a JSON object with this EXACT structure:
         if not db_sess:
             raise ValueError(f"Session {session_id} not found")
 
-        sess_topic: str = str(getattr(db_sess, "topic", "Lesson Topic"))
-        sess_lang: str = str(getattr(db_sess, "language", "en"))
+        sess_topic = getattr(db_sess, "topic", "Lesson Topic") or "Lesson Topic"
+        sess_lang = getattr(db_sess, "language", "en") or "en"
 
         plan_data: Dict[str, Any] = dict(db_sess.plan_json) if isinstance(db_sess.plan_json, dict) else {}
         raw_segments = plan_data.get("segments", [])
@@ -361,10 +361,10 @@ Output a JSON object with this EXACT structure:
         matching_seg = next((s for s in segments if s.get("id") == segment_id), None)
         seg: Dict[str, Any] = matching_seg or (segments[0] if segments else {"id": 1, "concept": sess_topic, "visual_type": "labeled-diagram"})
 
-        concept: str = str(seg.get("concept") or sess_topic)
-        visual_type: str = str(seg.get("visual_type") or "labeled-diagram")
-        active_lang: str = str(language or sess_lang or "en")
-        level: str = str(seg.get("depth") or "beginner")
+        concept = str(seg.get("concept") or sess_topic)
+        visual_type = str(seg.get("visual_type") or "labeled-diagram")
+        active_lang = language or sess_lang
+        level = str(seg.get("depth") or "beginner")
         
         # Build citations if material attached
         raw_mat_id = plan_data.get("material_id")
