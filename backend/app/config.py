@@ -39,7 +39,10 @@ class Settings(BaseSettings):
     AVATAR_DEFAULT_ID: str = os.getenv("AVATAR_DEFAULT_ID", "amy-j37u")
     
     # Database & Vector DB
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./sahayak.db")
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL", 
+        f"sqlite:///{os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sahayak.db').replace(os.sep, '/')}"
+    )
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     SUPABASE_STORAGE_BUCKET: str = os.getenv("SUPABASE_STORAGE_BUCKET", "lesson-media")
@@ -53,7 +56,7 @@ class Settings(BaseSettings):
     # App & CORS
     NEXT_PUBLIC_APP_URL: str = os.getenv("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
     DEFAULT_LANGUAGE: str = os.getenv("DEFAULT_LANGUAGE", "en")
-    SUPPORTED_LANGUAGES: str = os.getenv("SUPPORTED_LANGUAGES", "en,hi,hinglish")
+    SUPPORTED_LANGUAGES: str = os.getenv("SUPPORTED_LANGUAGES", "en,hi,hinglish,ta,te,bn,es")
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "25"))
     
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")

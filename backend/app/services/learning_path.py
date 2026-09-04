@@ -9,7 +9,7 @@ from .llm import LLMService
 logger = logging.getLogger("sahayak.learning_path")
 
 # Specialized curriculum templates for known subjects & dynamic cognitive synthesis for arbitrary topics
-DOMAIN_CURRICULA = {
+DOMAIN_CURRICULA: Dict[str, Dict[str, Any]] = {
     "quantum-computing": {
         "title": "Quantum Computing & Information Mechanics",
         "description": "Comprehensive Bloom's Taxonomy curriculum spanning qubit state spaces, quantum gates, entanglement, Shor's & Grover's algorithms, and fault-tolerant error correction.",
@@ -298,22 +298,11 @@ class LearningPathService:
         
         # Check if domain-specialized curriculum exists
         if topic_id.lower() in DOMAIN_CURRICULA:
-            spec = DOMAIN_CURRICULA[topic_id.lower()]
-            nodes = [
-                PathNode(
-                    id=n["id"],
-                    title=n["title"],
-                    description=n["description"],
-                    estimated_hours=n["estimated_hours"],
-                    difficulty=n["difficulty"],
-                    prerequisites=n["prerequisites"],
-                    completed=False,
-                    score=None
-                )
-                for n in spec["nodes"]
-            ]
-            title = spec["title"]
-            description = spec["description"]
+            spec: Dict[str, Any] = DOMAIN_CURRICULA[topic_id.lower()]
+            spec_nodes: List[Dict[str, Any]] = list(spec.get("nodes", []))
+            nodes = [PathNode.model_validate(n) for n in spec_nodes]
+            title = str(spec.get("title", clean_topic))
+            description = str(spec.get("description", ""))
             edges = [
                 {"from": "node-1", "to": "node-2"},
                 {"from": "node-2", "to": "node-3"},
@@ -368,19 +357,20 @@ JSON output schema:
                     temperature=0.3
                 )
                 
-                raw_nodes = llm_dag.get("nodes", [])
+                raw_nodes: List[Any] = llm_dag.get("nodes", []) if isinstance(llm_dag, dict) else []
                 if raw_nodes and len(raw_nodes) >= 3:
-                    for n in raw_nodes:
-                        nodes.append(PathNode(
-                            id=n.get("id", f"node-{len(nodes)+1}"),
-                            title=n.get("title", f"Unit {len(nodes)+1}"),
-                            description=n.get("description", ""),
-                            estimated_hours=float(n.get("estimated_hours", 2.0)),
-                            difficulty=n.get("difficulty", "beginner"),
-                            prerequisites=n.get("prerequisites", []),
-                            completed=False,
-                            score=None
-                        ))
+                    for i, n in enumerate(raw_nodes):
+                        if isinstance(n, dict):
+                            nodes.append(PathNode(
+                                id=str(n.get("id") or f"node-{i+1}"),
+                                title=str(n.get("title") or f"Unit {i+1}"),
+                                description=str(n.get("description") or ""),
+                                estimated_hours=float(n.get("estimated_hours") or 2.0),
+                                difficulty=str(n.get("difficulty") or "beginner"),
+                                prerequisites=[str(p) for p in (n.get("prerequisites") or []) if p],
+                                completed=False,
+                                score=None
+                            ))
                     title = llm_dag.get("title", title)
                     description = llm_dag.get("description", description)
                     
@@ -395,64 +385,58 @@ JSON output schema:
                 logger.warning(f"[LearningPathService] LLM DAG generation failed ({e}); using Bloom's Taxonomy template.")
 
             if not nodes:
-                stages = [
+                stages: List[Dict[str, Any]] = [
                     {
-                        "stage": "1. Foundations, Core Definitions & Intuition",
-                        "desc": f"First principles, historical context, fundamental terminology, and conceptual motivation behind {clean_topic}.",
-                        "diff": "beginner",
-                        "hours": 1.5,
-                        "prereq": []
+                        "id": "node-1",
+                        "title": "1. Foundations, Core Definitions & Intuition",
+                        "description": f"First principles, historical context, fundamental terminology, and conceptual motivation behind {clean_topic}.",
+                        "difficulty": "beginner",
+                        "estimated_hours": 1.5,
+                        "prerequisites": []
                     },
                     {
-                        "stage": f"2. Structural Mechanics & Principles of {clean_topic}",
-                        "desc": f"Underlying governing laws, core variables, system interactions, and standard formulations in {clean_topic}.",
-                        "diff": "beginner",
-                        "hours": 2.0,
-                        "prereq": ["node-1"]
+                        "id": "node-2",
+                        "title": f"2. Structural Mechanics & Principles of {clean_topic}",
+                        "description": f"Underlying governing laws, core variables, system interactions, and standard formulations in {clean_topic}.",
+                        "difficulty": "beginner",
+                        "estimated_hours": 2.0,
+                        "prerequisites": ["node-1"]
                     },
                     {
-                        "stage": f"3. Applied Techniques & Problem-Solving Routines",
-                        "desc": f"Step-by-step methodologies, practical executions, and standard problem-solving patterns in {clean_topic}.",
-                        "diff": "intermediate",
-                        "hours": 3.0,
-                        "prereq": ["node-2"]
+                        "id": "node-3",
+                        "title": f"3. Applied Techniques & Problem-Solving Routines",
+                        "description": f"Step-by-step methodologies, practical executions, and standard problem-solving patterns in {clean_topic}.",
+                        "difficulty": "intermediate",
+                        "estimated_hours": 3.0,
+                        "prerequisites": ["node-2"]
                     },
                     {
-                        "stage": f"4. Experimental Diagnostics & Edge-Case Analysis",
-                        "desc": f"Analyzing failure modes, diagnostic criteria, boundary conditions, and performance optimization for {clean_topic}.",
-                        "diff": "intermediate",
-                        "hours": 3.5,
-                        "prereq": ["node-3"]
+                        "id": "node-4",
+                        "title": f"4. Experimental Diagnostics & Edge-Case Analysis",
+                        "description": f"Analyzing failure modes, diagnostic criteria, boundary conditions, and performance optimization for {clean_topic}.",
+                        "difficulty": "intermediate",
+                        "estimated_hours": 3.5,
+                        "prerequisites": ["node-3"]
                     },
                     {
-                        "stage": f"5. Advanced Theory, Synthesis & Optimization",
-                        "desc": f"Rigorous comparative models, high-level optimizations, and asymptotic behaviors within {clean_topic}.",
-                        "diff": "advanced",
-                        "hours": 4.0,
-                        "prereq": ["node-4"]
+                        "id": "node-5",
+                        "title": f"5. Advanced Theory, Synthesis & Optimization",
+                        "description": f"Rigorous comparative models, high-level optimizations, and asymptotic behaviors within {clean_topic}.",
+                        "difficulty": "advanced",
+                        "estimated_hours": 4.0,
+                        "prerequisites": ["node-4"]
                     },
                     {
-                        "stage": f"6. Capstone Integration & Real-World Case Studies",
-                        "desc": f"End-to-end multi-disciplinary projects, modern research frontiers, and industrial applications of {clean_topic}.",
-                        "diff": "advanced",
-                        "hours": 5.0,
-                        "prereq": ["node-5"]
+                        "id": "node-6",
+                        "title": f"6. Capstone Integration & Real-World Case Studies",
+                        "description": f"End-to-end multi-disciplinary projects, modern research frontiers, and industrial applications of {clean_topic}.",
+                        "difficulty": "advanced",
+                        "estimated_hours": 5.0,
+                        "prerequisites": ["node-5"]
                     }
                 ]
 
-                nodes = [
-                    PathNode(
-                        id=f"node-{i+1}",
-                        title=f"{st['stage']}",
-                        description=st["desc"],
-                        estimated_hours=st["hours"],
-                        difficulty=st["diff"],
-                        prerequisites=st["prereq"],
-                        completed=False,
-                        score=None
-                    )
-                    for i, st in enumerate(stages)
-                ]
+                nodes = [PathNode.model_validate(st) for st in stages]
                 edges = [
                     {"from": "node-1", "to": "node-2"},
                     {"from": "node-2", "to": "node-3"},

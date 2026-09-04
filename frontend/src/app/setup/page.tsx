@@ -158,6 +158,10 @@ function SetupForm() {
               <option value="en">English (Global)</option>
               <option value="hi">हिंदी (Hindi)</option>
               <option value="hinglish">Hinglish (Conversational)</option>
+              <option value="ta">தமிழ் (Tamil)</option>
+              <option value="te">తెలుగు (Telugu)</option>
+              <option value="bn">বাংলা (Bengali)</option>
+              <option value="es">Español (Spanish)</option>
             </select>
           </div>
         </div>

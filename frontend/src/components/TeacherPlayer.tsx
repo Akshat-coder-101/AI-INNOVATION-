@@ -10,6 +10,7 @@ import VisualRenderer from "./VisualRenderer";
 import CitationChip from "./CitationChip";
 import DemoModeToggle from "./DemoModeToggle";
 import MisconceptionModal from "./MisconceptionModal";
+import AudioReactiveAvatar from "./AudioReactiveAvatar";
 import { 
   Play, 
   Pause, 
@@ -526,17 +527,21 @@ export default function TeacherPlayer({
         {/* Language Switcher */}
         <div className="flex items-center gap-2">
           <Languages className="w-4 h-4 text-ink-muted" />
-          <div className="flex rounded bg-canvas-elevated p-0.5 border border-border text-xs">
+          <div className="flex flex-wrap rounded bg-canvas-elevated p-0.5 border border-border text-xs gap-0.5">
             {[
               { id: "en", label: "English" },
               { id: "hi", label: "हिंदी" },
               { id: "hinglish", label: "Hinglish" },
+              { id: "ta", label: "தமிழ்" },
+              { id: "te", label: "తెలుగు" },
+              { id: "bn", label: "বাংলা" },
+              { id: "es", label: "Español" },
             ].map((lang) => (
               <button
                 key={lang.id}
                 onClick={() => handleLanguageChange(lang.id)}
                 disabled={isSwitchingLang}
-                className={`px-2.5 py-1 rounded font-semibold transition-all ${
+                className={`px-2 py-0.5 rounded font-semibold transition-all text-[11px] ${
                   activeLanguage === lang.id
                     ? "bg-white text-primary shadow-2xs font-bold"
                     : "text-ink-secondary hover:text-ink-primary"
@@ -584,40 +589,33 @@ export default function TeacherPlayer({
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                 ) : (
-                  /* Virtual Teacher Studio (free_avatar) */
+                  /* Virtual Teacher Studio (Audio-Reactive Presenter) */
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-neutral-900 via-neutral-950 to-black p-4">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent pointer-events-none" />
 
-                    <div className="relative z-10 flex flex-col items-center text-center">
-                      <div className={`relative rounded-full overflow-hidden transition-all duration-500 w-28 h-28 sm:w-36 sm:h-36 ${
-                        isPlaying
-                          ? "ring-4 ring-primary ring-offset-4 ring-offset-neutral-950 shadow-[0_0_35px_rgba(0,86,210,0.4)] scale-105"
-                          : "ring-2 ring-neutral-700"
-                      }`}>
-                        <img
-                          src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=400&auto=format&fit=crop"
-                          alt="Prof. Sahayak"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-
-                      <span className="text-white text-sm font-bold tracking-wide mt-3">
-                        Prof. Sahayak AI
-                      </span>
-                      <span className="text-neutral-400 text-xs font-mono mt-0.5">
-                        {activeLanguage === "hi" ? "अध्यापन सत्र (Hindi)" : activeLanguage === "hinglish" ? "Interactive Hinglish Session" : "Adaptive Lecture Studio"}
-                      </span>
-
-                      {/* Waveform Equalizer when Playing */}
-                      {isPlaying && (
-                        <div className="flex items-center gap-1 mt-3">
-                          <span className="w-1.5 h-3.5 bg-accent rounded-full animate-bounce"></span>
-                          <span className="w-1.5 h-6 bg-highlight rounded-full animate-bounce [animation-delay:0.15s]"></span>
-                          <span className="w-1.5 h-8 bg-primary rounded-full animate-bounce [animation-delay:0.3s]"></span>
-                          <span className="w-1.5 h-5 bg-accent rounded-full animate-bounce [animation-delay:0.45s]"></span>
-                          <span className="w-1.5 h-2.5 bg-highlight rounded-full animate-bounce [animation-delay:0.6s]"></span>
-                        </div>
-                      )}
+                    <div className="relative z-10">
+                      <AudioReactiveAvatar
+                        audioRef={audioRef}
+                        isPlaying={isPlaying}
+                        isFallbackSpeaking={!segment.audio_url && isPlaying}
+                        size={145}
+                        name="Prof. Sahayak AI"
+                        subtitle={
+                          activeLanguage === "hi"
+                            ? "अध्यापन सत्र (Hindi)"
+                            : activeLanguage === "ta"
+                            ? "கற்பித்தல் அமர்வு (Tamil)"
+                            : activeLanguage === "te"
+                            ? "బోధనా సెషన్ (Telugu)"
+                            : activeLanguage === "bn"
+                            ? "শিক্ষণ সেশন (Bengali)"
+                            : activeLanguage === "es"
+                            ? "Sesión de Aprendizaje (Spanish)"
+                            : activeLanguage === "hinglish"
+                            ? "Interactive Hinglish Session"
+                            : "Adaptive Lecture Studio"
+                        }
+                      />
                     </div>
                   </div>
                 )}
@@ -954,14 +952,14 @@ export default function TeacherPlayer({
                     />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-neutral-900 via-neutral-950 to-black p-4">
-                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 border-primary/50 shadow-md">
-                        <img
-                          src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=400&auto=format&fit=crop"
-                          alt="AI Teacher"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <span className="text-white text-xs font-bold mt-2">Prof. Sahayak AI</span>
+                      <AudioReactiveAvatar
+                        audioRef={audioRef}
+                        isPlaying={isPlaying}
+                        isFallbackSpeaking={!segment.audio_url && isPlaying}
+                        size={110}
+                        name="Prof. Sahayak"
+                        subtitle="Adaptive Presenter"
+                      />
                     </div>
                   )}
 

@@ -170,9 +170,22 @@ JSON format expected:
     async def grade_quiz_submission(
         cls, 
         session_id: str, 
-        answers: Dict[str, str], 
+        answers: Any, 
         db: Session
     ) -> QuizGradeResponse:
+        # Normalize answers to Dict[str, str] whether provided as dict or list
+        normalized_answers: Dict[str, str] = {}
+        if isinstance(answers, list):
+            for item in answers:
+                if isinstance(item, dict):
+                    qid = str(item.get("question_id") or item.get("id") or "")
+                    ans = str(item.get("selected_option") or item.get("answer") or item.get("student_answer") or "")
+                    if qid:
+                        normalized_answers[qid] = ans
+        elif isinstance(answers, dict):
+            normalized_answers = {str(k): str(v) for k, v in answers.items()}
+        answers = normalized_answers
+
         quiz_record = db.query(DBQuiz).filter(DBQuiz.session_id == session_id).order_by(DBQuiz.created_at.desc()).first()
         if not quiz_record or not quiz_record.questions_json:
             quiz = await cls.generate_quiz_for_session(session_id, db)

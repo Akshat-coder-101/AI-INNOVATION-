@@ -66,6 +66,22 @@ class EvaluatorService:
         return random.choice(available)
 
     @classmethod
+    def _get_distinct_visual_type(cls, prev_visual_type: str, concept: str) -> str:
+        """Ensures the retry visual type is completely different from the initial slide."""
+        prev = (prev_visual_type or "labeled-diagram").lower()
+        domain = cls._detect_domain(concept)
+        
+        if "diagram" in prev:
+            return "equation/graph" if domain in ["physics", "general"] else "timeline/map"
+        elif "equation" in prev or "graph" in prev:
+            return "code+execution" if domain == "programming" else "labeled-diagram"
+        elif "code" in prev:
+            return "equation/graph"
+        elif "timeline" in prev or "map" in prev:
+            return "labeled-diagram"
+        return "equation/graph"
+
+    @classmethod
     async def evaluate_student_answer(
         cls,
         session_id: str,
@@ -83,6 +99,7 @@ class EvaluatorService:
         current_segment = next((s for s in segments if s.get("id") == segment_id), None)
         concept = current_segment.get("concept", topic) if current_segment else topic
         level = current_segment.get("depth", "beginner") if current_segment else "beginner"
+        prev_visual_type = current_segment.get("visual_type", "labeled-diagram") if current_segment else "labeled-diagram"
         question_data = current_segment.get("checkpoint_question", {}) if current_segment else {}
         question_text = question_data.get("question", "")
         correct_answer = question_data.get("correct_answer", "")
@@ -196,8 +213,9 @@ Output JSON schema:
                 spoken_script = f"Let's look at {concept} with a fresh model. {remediation} {new_example} Notice how this resolves the edge case."
                 on_screen_text = f"💡 Reteach Focus: {concept}\n\n• Diagnosed: {misconception_name}\n• Insight: {new_analogy[:80]}\n• Concrete Case: {new_example[:80]}"
                 
-                visual_type = current_segment.get("visual_type", "labeled-diagram") if current_segment else "labeled-diagram"
-                visual_spec = VisualRouter.generate_visual_spec(concept, visual_type, level)
+                # Switch to a VISIBLY DIFFERENT visual type on retry
+                new_visual_type = cls._get_distinct_visual_type(prev_visual_type, concept)
+                visual_spec = VisualRouter.generate_visual_spec(f"[Adaptive Reteach] {concept}", new_visual_type, level)
 
                 tts_res = await TTSService.generate_speech(spoken_script, language=language)
                 audio_url = tts_res.get("audio_url")
@@ -312,8 +330,9 @@ Output JSON schema:
         spoken_script = f"Let's look at {concept} with a fresh perspective. {analogy_text} {new_example} Notice how the relationship holds true across all conditions."
         on_screen_text = f"💡 Reteach Focus: {concept}\n\n• New Model: {analogy_title}\n• Key Insight: Dynamic response scales directly with driving stimulus."
         
-        visual_type = current_segment.get("visual_type", "labeled-diagram") if current_segment else "labeled-diagram"
-        visual_spec = VisualRouter.generate_visual_spec(concept, visual_type, "beginner")
+        # Switch to a VISIBLY DIFFERENT visual type on retry
+        new_visual_type = cls._get_distinct_visual_type(prev_visual_type, concept)
+        visual_spec = VisualRouter.generate_visual_spec(f"[Remediation Blackboard] {concept}", new_visual_type, "beginner")
         
         reteach_segment = LessonSegmentRender(
             segment_id=segment_id,

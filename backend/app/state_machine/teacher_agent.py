@@ -11,7 +11,9 @@ from ..models.schemas import (
     LessonSegmentRender, 
     CaptionItem, 
     Citation, 
-    LearnerProfileCreate
+    LearnerProfileCreate,
+    PathNode,
+    LearningPath
 )
 from ..services.rag import RAGService
 from ..services.visual_router import VisualRouter
@@ -150,43 +152,47 @@ Output a JSON object with this EXACT structure:
                     cp = raw_cp if isinstance(raw_cp, dict) else {}
                     
                     # Ensure options has 4 choices
-                    options = cp.get("options", [])
-                    if not isinstance(options, list) or len(options) < 2:
+                    raw_opts = cp.get("options", [])
+                    if not isinstance(raw_opts, list) or len(raw_opts) < 2:
                         options = [
                             f"A) Correct principle of {s.get('concept', effective_topic)}",
                             "B) Contradictory opposing hypothesis",
                             "C) Non-interacting baseline",
                             "D) Random fluctuation"
                         ]
-                    correct_ans = cp.get("correct_answer") or options[0]
+                    else:
+                        options = [str(opt) for opt in raw_opts]
+                    correct_ans = str(cp.get("correct_answer") or options[0])
+
+                    hints_list = [str(h) for h in cp["hints"]] if isinstance(cp.get("hints"), list) else [f"Focus on the core definition of {s.get('concept')}"]
 
                     checkpoint_q = CheckpointQuestion(
                         type=str(cp.get("type", "mcq")),
                         question=str(cp.get("question", f"What is the key principle of {s.get('concept')}?")),
                         options=options,
-                        correct_answer=str(correct_ans),
-                        hints=cp.get("hints") if isinstance(cp.get("hints"), list) else [f"Focus on the core definition of {s.get('concept')}"],
+                        correct_answer=correct_ans,
+                        hints=hints_list,
                         concept_tested=str(s.get("concept", effective_topic))
                     )
 
                     parsed_segments.append(LessonSegmentPlan(
                         id=s_id,
-                        concept=s.get("concept", f"Concept {s_id}"),
-                        depth=s.get("depth", level),
+                        concept=str(s.get("concept", f"Concept {s_id}")),
+                        depth=str(s.get("depth", level)),
                         est_minutes=int(s.get("est_minutes", max(1, time_budget_minutes // len(raw_segments)))),
-                        visual_type=s.get("visual_type", "labeled-diagram"),
+                        visual_type=str(s.get("visual_type", "labeled-diagram")),
                         checkpoint_question=checkpoint_q,
-                        summary=s.get("summary", f"Mastery of {s.get('concept')}")
+                        summary=str(s.get("summary", f"Mastery of {s.get('concept')}"))
                     ))
 
                 plan = LessonPlan(
                     session_id=session_id,
                     topic=effective_topic,
-                    objectives=llm_plan.get("objectives", [
+                    objectives=[str(o) for o in llm_plan.get("objectives", [
                         f"Master core principles of {effective_topic}",
                         f"Understand governing rules and real-world mechanisms",
                         f"Solve interactive checkpoints and verify mastery"
-                    ]),
+                    ])],
                     time_budget_minutes=time_budget_minutes,
                     learner_level=level,
                     language=language,
@@ -242,10 +248,10 @@ Output a JSON object with this EXACT structure:
         fallback_segments: List[LessonSegmentPlan] = []
         for idx, sc in enumerate(segment_configs):
             seg_id = idx + 1
-            concept_name = sc["title"]
+            concept_name: str = str(sc["title"])
             
             # Checkpoint Question with randomized correct option distribution
-            options_pool = [
+            options_pool: List[str] = [
                 f"A) {concept_name} preserves conservation laws through predictable dynamic state transitions.",
                 f"B) {concept_name} operates in absolute isolation with zero energy exchange.",
                 f"C) Boundary conditions are purely arbitrary and non-measurable.",
@@ -262,10 +268,10 @@ Output a JSON object with this EXACT structure:
 
             fallback_segments.append(LessonSegmentPlan(
                 id=seg_id,
-                concept=concept_name,
-                depth=sc["depth"],
-                est_minutes=sc["est"],
-                visual_type=sc["visual"],
+                concept=str(concept_name),
+                depth=str(sc.get("depth", level)),
+                est_minutes=int(sc.get("est", 4)),
+                visual_type=str(sc.get("visual", "labeled-diagram")),
                 checkpoint_question=checkpoint_q,
                 summary=f"In this segment, we systematically examine {concept_name} tailored for {level} level learners."
             ))
@@ -346,21 +352,21 @@ Output a JSON object with this EXACT structure:
         if not db_sess:
             raise ValueError(f"Session {session_id} not found")
 
-        plan_data = db_sess.plan_json or {}
-        segments = plan_data.get("segments", [])
-        seg = next((s for s in segments if s.get("id") == segment_id), None)
-        if not seg:
-            seg = segments[0] if segments else {"id": 1, "concept": db_sess.topic, "visual_type": "labeled-diagram"}
+        plan_data: Dict[str, Any] = dict(db_sess.plan_json) if isinstance(db_sess.plan_json, dict) else {}
+        raw_segments = plan_data.get("segments", [])
+        segments: List[Dict[str, Any]] = [s for s in raw_segments if isinstance(s, dict)]
+        matching_seg = next((s for s in segments if s.get("id") == segment_id), None)
+        seg: Dict[str, Any] = matching_seg or (segments[0] if segments else {"id": 1, "concept": str(db_sess.topic), "visual_type": "labeled-diagram"})
 
-        concept = seg.get("concept", db_sess.topic)
-        visual_type = seg.get("visual_type", "labeled-diagram")
-        active_lang = language or db_sess.language or "en"
-        level = seg.get("depth", "beginner")
+        concept: str = str(seg.get("concept", db_sess.topic))
+        visual_type: str = str(seg.get("visual_type", "labeled-diagram"))
+        active_lang: str = str(language or db_sess.language or "en")
+        level: str = str(seg.get("depth", "beginner"))
         
         # Build citations if material attached
-        material_id = plan_data.get("material_id")
+        material_id: Optional[str] = str(plan_data["material_id"]) if plan_data.get("material_id") else None
         citations: List[Citation] = []
-        rag_context = ""
+        rag_context: str = ""
         if material_id:
             rag_context, citations = RAGService.get_grounded_context_and_citations(concept, material_id, db)
 
@@ -475,18 +481,18 @@ Output JSON with:
         return LessonSegmentRender(
             segment_id=segment_id,
             session_id=session_id,
-            concept=concept,
+            concept=str(concept),
             spoken_script=spoken_script,
             on_screen_text=on_screen_text,
             visual_spec=visual_spec,
             audio_url=audio_url,
             avatar_video_url=avatar_res.get("video_url"),
             video_url=video_res.get("video_url"),
-            video_status=video_res.get("status", "unavailable"),
+            video_status=str(video_res.get("status", "unavailable")),
             captions=captions,
             citations=citations,
             checkpoint_question=checkpoint_q,
-            analogies_used=db_sess.analogies_used or [],
+            analogies_used=[str(a) for a in (db_sess.analogies_used or [])],
             language=active_lang,
             is_reteach=False
         )

@@ -57,5 +57,12 @@ backend/generated_media/
 generated_media/
 *.mp4
 *.mp3
+*.wav
 *.srt
 *.png_plot.png
+
+# Neural Voice Models (auto-downloaded on first run)
+backend/models/
+*.onnx
+*.onnx.json
+

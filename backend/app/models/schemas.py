@@ -184,7 +184,7 @@ class Quiz(BaseModel):
 
 class StudentQuizSubmission(BaseModel):
     session_id: str
-    answers: Dict[str, str]
+    answers: Union[Dict[str, str], List[Dict[str, Any]]]
 
 class QuestionGradeResult(BaseModel):
     question_id: str
@@ -219,9 +219,9 @@ class PathNode(BaseModel):
     id: str
     title: str
     description: str
-    estimated_hours: float
-    difficulty: str
-    prerequisites: List[str] = []
+    estimated_hours: float = 1.0
+    difficulty: str = "beginner"
+    prerequisites: List[str] = Field(default_factory=list)
     completed: bool = False
     score: Optional[float] = None
 
