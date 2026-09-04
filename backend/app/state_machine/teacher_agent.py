@@ -56,7 +56,7 @@ class TeacherAgentStateMachine:
         return s
 
     def transition_to(self, new_state: str) -> str:
-        old_state = str(self.db_session.state)
+        old_state: str = getattr(self.db_session, "state", TeacherState.UNDERSTAND)
         self.db_session.state = new_state
         self.db.commit()
         return f"Transitioned from {old_state} -> {new_state}"
@@ -222,6 +222,7 @@ Output a JSON object with this EXACT structure:
             logger.warning(f"[TeacherAgent] LLM lesson planning failed ({e}); activating deterministic fallback template.")
 
         # 2. Deterministic Fallback Template
+        segment_configs: List[Dict[str, Any]] = []
         if time_budget_minutes <= 5:
             segment_configs = [
                 {"title": f"Core Principle of {effective_topic}", "depth": level, "est": 2, "visual": "labeled-diagram"},
@@ -247,7 +248,7 @@ Output a JSON object with this EXACT structure:
         fallback_segments: List[LessonSegmentPlan] = []
         for idx, sc in enumerate(segment_configs):
             seg_id = idx + 1
-            concept_name: str = str(sc["title"])
+            concept_name = str(sc.get("title") or f"Unit {seg_id}")
             
             # Checkpoint Question with randomized correct option distribution
             options_pool: List[str] = [
@@ -267,10 +268,10 @@ Output a JSON object with this EXACT structure:
 
             fallback_segments.append(LessonSegmentPlan(
                 id=seg_id,
-                concept=str(concept_name),
-                depth=str(sc.get("depth", level)),
-                est_minutes=int(sc.get("est", 4)),
-                visual_type=str(sc.get("visual", "labeled-diagram")),
+                concept=concept_name,
+                depth=str(sc.get("depth") or level),
+                est_minutes=int(sc.get("est") or 4),
+                visual_type=str(sc.get("visual") or "labeled-diagram"),
                 checkpoint_question=checkpoint_q,
                 summary=f"In this segment, we systematically examine {concept_name} tailored for {level} level learners."
             ))
@@ -351,16 +352,19 @@ Output a JSON object with this EXACT structure:
         if not db_sess:
             raise ValueError(f"Session {session_id} not found")
 
+        sess_topic: str = str(getattr(db_sess, "topic", "Lesson Topic"))
+        sess_lang: str = str(getattr(db_sess, "language", "en"))
+
         plan_data: Dict[str, Any] = dict(db_sess.plan_json) if isinstance(db_sess.plan_json, dict) else {}
         raw_segments = plan_data.get("segments", [])
         segments: List[Dict[str, Any]] = [s for s in raw_segments if isinstance(s, dict)]
         matching_seg = next((s for s in segments if s.get("id") == segment_id), None)
-        seg: Dict[str, Any] = matching_seg or (segments[0] if segments else {"id": 1, "concept": str(db_sess.topic), "visual_type": "labeled-diagram"})
+        seg: Dict[str, Any] = matching_seg or (segments[0] if segments else {"id": 1, "concept": sess_topic, "visual_type": "labeled-diagram"})
 
-        concept: str = str(seg.get("concept", db_sess.topic))
-        visual_type: str = str(seg.get("visual_type", "labeled-diagram"))
-        active_lang: str = str(language or db_sess.language or "en")
-        level: str = str(seg.get("depth", "beginner"))
+        concept: str = str(seg.get("concept") or sess_topic)
+        visual_type: str = str(seg.get("visual_type") or "labeled-diagram")
+        active_lang: str = str(language or sess_lang or "en")
+        level: str = str(seg.get("depth") or "beginner")
         
         # Build citations if material attached
         raw_mat_id = plan_data.get("material_id")
@@ -481,7 +485,7 @@ Output JSON with:
         return LessonSegmentRender(
             segment_id=segment_id,
             session_id=session_id,
-            concept=str(concept),
+            concept=concept,
             spoken_script=spoken_script,
             on_screen_text=on_screen_text,
             visual_spec=visual_spec,
