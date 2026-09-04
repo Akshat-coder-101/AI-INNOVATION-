@@ -2,7 +2,7 @@ import uuid
 import logging
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from ..database import DBLessonSession, DBMaterial, DBLearnerProfile
+from ..database import DBLessonSession, DBMaterial, DBLearnerProfile, DBMaterialChunk
 from ..models.schemas import (
     LessonPlan, 
     LessonSegmentPlan, 
@@ -11,6 +11,7 @@ from ..models.schemas import (
     LessonSegmentRender, 
     CaptionItem, 
     Citation, 
+    SourceCitation,
     LearnerProfileCreate
 )
 from ..services.rag import RAGService
@@ -21,6 +22,12 @@ from ..services.video import VideoService
 from ..services.llm import LLMService, LLMUnavailable
 
 logger = logging.getLogger("sahayak.teacher")
+
+GROUNDING_GUARDRAIL_PROMPT = (
+    "Teach ONLY from the provided source material. Cite it. "
+    "If the student asks about something not covered by these sources, "
+    "say it is outside this document — do not invent it."
+)
 
 class TeacherState:
     UNDERSTAND = "understand"
@@ -62,6 +69,303 @@ class TeacherAgentStateMachine:
         return f"Transitioned from {old_state} -> {new_state}"
 
     @classmethod
+    async def plan_from_document(
+        cls,
+        *,
+        document_id: str,
+        time_budget_minutes: int = 20,
+        language: str = "en",
+        learner_profile: Optional[LearnerProfileCreate] = None,
+        db: Session
+    ) -> LessonPlan:
+        session_id = str(uuid.uuid4())
+        user_id = learner_profile.user_id if learner_profile else "default-user"
+        level = learner_profile.level if learner_profile else "beginner"
+        style = learner_profile.preferred_style if learner_profile else "visual"
+
+        db_mat = db.query(DBMaterial).filter(DBMaterial.id == document_id).first()
+        filename = db_mat.filename if db_mat else "Uploaded Document"
+        topic = f"Study: {filename}"
+
+        chunks = db.query(DBMaterialChunk).filter(DBMaterialChunk.material_id == document_id).all()
+        target_segment_count = 2 if time_budget_minutes <= 5 else (4 if time_budget_minutes <= 25 else 6)
+
+        if not chunks:
+            # Fallback if no chunks stored
+            return await cls._generate_standard_lesson_plan(
+                topic=topic,
+                material_id=document_id,
+                profile=learner_profile,
+                time_budget_minutes=time_budget_minutes,
+                language=language,
+                db=db
+            )
+
+        # Partition all chunks across the target segments so the entire document is covered
+        chunk_partitions: List[List[DBMaterialChunk]] = [[] for _ in range(target_segment_count)]
+        for idx, chunk in enumerate(chunks):
+            partition_idx = min(idx * target_segment_count // len(chunks), target_segment_count - 1)
+            chunk_partitions[partition_idx].append(chunk)
+
+        # Build grounded context summary across partitions
+        partition_summaries = []
+        for i, part in enumerate(chunk_partitions):
+            if not part:
+                part = [chunks[min(i, len(chunks)-1)]]
+                chunk_partitions[i] = part
+            part_texts = [f"[Chunk ID: {c.id}, Page: {c.page or 1}, Section: {c.chapter}]: {c.content[:250]}" for c in part[:3]]
+            partition_summaries.append(f"Segment {i+1} Material:\n" + "\n".join(part_texts))
+
+        all_material_summary = "\n\n".join(partition_summaries)
+
+        # 1. Try LLM Planning
+        try:
+            system_prompt = (
+                "You are Sahayak AI Teacher, an elite world-class personalized educational architect. "
+                f"{GROUNDING_GUARDRAIL_PROMPT} "
+                "Design a structured lesson plan strictly grounded in the document source excerpts."
+            )
+            user_prompt = f"""Generate a grounded {target_segment_count}-segment lesson plan for:
+Document: {filename}
+Time Budget: {time_budget_minutes} minutes ({target_segment_count} progressive segments)
+Learner Level: {level}
+Language: {language}
+
+SOURCE MATERIAL PARTITIONS (Cover these progressively across segments):
+{all_material_summary}
+
+CRITICAL RULE: {GROUNDING_GUARDRAIL_PROMPT}
+Each segment must teach strictly from its designated source partition and list the exact cited chunk IDs.
+
+Output JSON with this EXACT structure:
+{{
+  "objectives": ["string", "string", "string"],
+  "segments": [
+    {{
+      "id": 1,
+      "concept": "Name of Concept Grounded in Segment 1 Material",
+      "depth": "{level}",
+      "est_minutes": {max(1, time_budget_minutes // target_segment_count)},
+      "visual_type": "labeled-diagram | equation/graph | code+execution | timeline/map",
+      "summary": "Pedagogical summary grounded in the document.",
+      "cited_chunk_ids": ["chunk_id_from_above"],
+      "checkpoint_question": {{
+        "type": "mcq",
+        "question": "Question testing the concept from this document excerpt?",
+        "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
+        "correct_answer": "A) ...",
+        "hints": ["Hint grounded in document"]
+      }}
+    }}
+  ]
+}}
+"""
+            llm_plan = await LLMService.generate_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                schema_hint="LessonPlan JSON with objectives[], segments[{id, concept, depth, est_minutes, visual_type, summary, cited_chunk_ids, checkpoint_question}]",
+                temperature=0.2
+            )
+
+            raw_segments = llm_plan.get("segments", [])
+            if raw_segments and len(raw_segments) > 0:
+                parsed_segments: List[LessonSegmentPlan] = []
+                for idx, s in enumerate(raw_segments):
+                    s_id = idx + 1
+                    part_chunks = chunk_partitions[min(idx, len(chunk_partitions) - 1)]
+                    
+                    # Resolve cited chunks
+                    cited_ids = s.get("cited_chunk_ids", [])
+                    matched_chunks = [c for c in chunks if c.id in cited_ids] if cited_ids else part_chunks[:2]
+                    if not matched_chunks:
+                        matched_chunks = part_chunks[:2] if part_chunks else chunks[:1]
+
+                    source_cites: List[SourceCitation] = []
+                    segment_citations: List[Citation] = []
+                    for mc in matched_chunks:
+                        snippet = mc.content[:180] + "..." if len(mc.content) > 180 else mc.content
+                        source_cites.append(SourceCitation(
+                            chunk_id=mc.id,
+                            page=mc.page or 1,
+                            quote=snippet
+                        ))
+                        segment_citations.append(Citation(
+                            chunk_id=mc.id,
+                            chapter=mc.chapter or "Document Section",
+                            page=mc.page or 1,
+                            section=mc.section or "",
+                            quote=snippet,
+                            snippet=snippet,
+                            confidence=0.98
+                        ))
+
+                    raw_cp = s.get("checkpoint_question") or {}
+                    raw_opts = raw_cp.get("options", [])
+                    concept_name = str(s.get("concept") or (part_chunks[0].chapter if part_chunks else f"Segment {s_id}"))
+                    
+                    if not isinstance(raw_opts, list) or len(raw_opts) < 2:
+                        options = [
+                            f"A) Correct principle of {concept_name}",
+                            "B) Contradictory opposing hypothesis",
+                            "C) Non-interacting baseline",
+                            "D) Random fluctuation"
+                        ]
+                    else:
+                        options = [str(opt) for opt in raw_opts]
+                    correct_ans = str(raw_cp.get("correct_answer") or options[0])
+                    hints_list = [str(h) for h in raw_cp.get("hints", [])] if isinstance(raw_cp.get("hints"), list) else [f"Review {concept_name}"]
+
+                    checkpoint_q = CheckpointQuestion(
+                        type=str(raw_cp.get("type", "mcq")),
+                        question=str(raw_cp.get("question", f"What is the key principle of {concept_name}?")),
+                        options=options,
+                        correct_answer=correct_ans,
+                        hints=hints_list,
+                        concept_tested=concept_name
+                    )
+
+                    parsed_segments.append(LessonSegmentPlan(
+                        id=s_id,
+                        concept=concept_name,
+                        depth=str(s.get("depth", level)),
+                        est_minutes=int(s.get("est_minutes", max(1, time_budget_minutes // target_segment_count))),
+                        visual_type=str(s.get("visual_type", "labeled-diagram")),
+                        checkpoint_question=checkpoint_q,
+                        summary=str(s.get("summary", f"Study of {concept_name}")),
+                        source_citations=source_cites,
+                        citations=segment_citations
+                    ))
+
+                plan = LessonPlan(
+                    session_id=session_id,
+                    topic=topic,
+                    objectives=[str(o) for o in llm_plan.get("objectives", [
+                        f"Master concepts in {filename}",
+                        "Examine document-grounded principles and derivations",
+                        "Demonstrate mastery through grounded checkpoints"
+                    ])],
+                    time_budget_minutes=time_budget_minutes,
+                    learner_level=level,
+                    language=language,
+                    segments=parsed_segments,
+                    final_assessment=FinalAssessmentSpec(type="quiz", question_count=len(parsed_segments) + 1),
+                    material_id=document_id,
+                    document_id=document_id
+                )
+
+                db_sess = DBLessonSession(
+                    id=session_id,
+                    user_id=user_id,
+                    topic=topic,
+                    language=language,
+                    time_budget=time_budget_minutes,
+                    current_segment_id=1,
+                    state=TeacherState.EXPLAIN,
+                    plan_json=plan.model_dump(),
+                    taught_concepts=[s.concept for s in parsed_segments],
+                    analogies_used=[]
+                )
+                db.add(db_sess)
+                db.commit()
+                logger.info(f"[TeacherAgent] Generated grounded document lesson plan with {len(parsed_segments)} segments.")
+                return plan
+
+        except Exception as e:
+            logger.warning(f"[TeacherAgent] Grounded document LLM planning failed ({e}); falling back to deterministic extractor.")
+
+        # 2. Deterministic Procedural Fallback from Document Chunks
+        fallback_segments: List[LessonSegmentPlan] = []
+        for idx in range(target_segment_count):
+            s_id = idx + 1
+            part_chunks = chunk_partitions[idx] if idx < len(chunk_partitions) and chunk_partitions[idx] else chunks[:1]
+            primary_chunk = part_chunks[0]
+            
+            concept_name = primary_chunk.chapter or f"Section {s_id}: {filename}"
+            if "Chapter" not in concept_name and "Section" not in concept_name and len(concept_name) > 3:
+                concept_name = f"{s_id}. {concept_name}"
+            else:
+                concept_name = f"{s_id}. {primary_chunk.chapter or 'Document Unit'}"
+
+            source_cites: List[SourceCitation] = []
+            segment_citations: List[Citation] = []
+            for mc in part_chunks[:2]:
+                snippet = mc.content[:180] + "..." if len(mc.content) > 180 else mc.content
+                source_cites.append(SourceCitation(
+                    chunk_id=mc.id,
+                    page=mc.page or 1,
+                    quote=snippet
+                ))
+                segment_citations.append(Citation(
+                    chunk_id=mc.id,
+                    chapter=mc.chapter or "Document Section",
+                    page=mc.page or 1,
+                    section=mc.section or "",
+                    quote=snippet,
+                    snippet=snippet,
+                    confidence=0.98
+                ))
+
+            options_pool: List[str] = [
+                f"A) {concept_name} adheres strictly to the document's verified governing principles.",
+                f"B) {concept_name} contradicts all stated definitions in the source material.",
+                f"C) Boundary values fluctuate arbitrarily without mechanical constraint.",
+                f"D) The concept is entirely out of scope for this document."
+            ]
+            checkpoint_q = CheckpointQuestion(
+                type="mcq",
+                question=f"According to the source document, what is the key takeaway of {concept_name}?",
+                options=options_pool,
+                correct_answer=options_pool[0],
+                hints=[f"Review excerpt from Page {primary_chunk.page or 1}: {primary_chunk.content[:100]}..."],
+                concept_tested=concept_name
+            )
+
+            fallback_segments.append(LessonSegmentPlan(
+                id=s_id,
+                concept=concept_name,
+                depth=level,
+                est_minutes=max(1, time_budget_minutes // target_segment_count),
+                visual_type="labeled-diagram" if s_id % 2 == 1 else "equation/graph",
+                checkpoint_question=checkpoint_q,
+                summary=primary_chunk.content[:200] + "...",
+                source_citations=source_cites,
+                citations=segment_citations
+            ))
+
+        plan = LessonPlan(
+            session_id=session_id,
+            topic=topic,
+            objectives=[
+                f"Master core concepts from {filename}",
+                "Review verified source excerpts and formulas",
+                "Complete document-grounded checkpoints"
+            ],
+            time_budget_minutes=time_budget_minutes,
+            learner_level=level,
+            language=language,
+            segments=fallback_segments,
+            final_assessment=FinalAssessmentSpec(type="quiz", question_count=len(fallback_segments) + 1),
+            material_id=document_id,
+            document_id=document_id
+        )
+
+        db_sess = DBLessonSession(
+            id=session_id,
+            user_id=user_id,
+            topic=topic,
+            language=language,
+            time_budget=time_budget_minutes,
+            current_segment_id=1,
+            state=TeacherState.EXPLAIN,
+            plan_json=plan.model_dump(),
+            taught_concepts=[s.concept for s in fallback_segments],
+            analogies_used=[]
+        )
+        db.add(db_sess)
+        db.commit()
+        return plan
+
+    @classmethod
     async def generate_lesson_plan(
         cls, 
         topic: Optional[str], 
@@ -71,13 +375,39 @@ class TeacherAgentStateMachine:
         language: str, 
         db: Session
     ) -> LessonPlan:
+        if material_id:
+            return await cls.plan_from_document(
+                document_id=material_id,
+                time_budget_minutes=time_budget_minutes,
+                language=language,
+                learner_profile=profile,
+                db=db
+            )
+        return await cls._generate_standard_lesson_plan(
+            topic=topic,
+            material_id=None,
+            profile=profile,
+            time_budget_minutes=time_budget_minutes,
+            language=language,
+            db=db
+        )
+
+    @classmethod
+    async def _generate_standard_lesson_plan(
+        cls,
+        topic: Optional[str],
+        material_id: Optional[str],
+        profile: Optional[LearnerProfileCreate],
+        time_budget_minutes: int,
+        language: str,
+        db: Session
+    ) -> LessonPlan:
         session_id = str(uuid.uuid4())
         user_id = profile.user_id if profile else "default-user"
         level = profile.level if profile else "beginner"
         style = profile.preferred_style if profile else "visual"
-        effective_topic = topic or "Uploaded Document Learning Unit"
+        effective_topic = topic or "Foundational Principles"
         
-        # Grounding context from RAG
         grounded_context = ""
         citations = []
         if material_id:
@@ -367,12 +697,42 @@ Output a JSON object with this EXACT structure:
         level = str(seg.get("depth") or "beginner")
         
         # Build citations if material attached
-        raw_mat_id = plan_data.get("material_id")
+        raw_mat_id = plan_data.get("material_id") or plan_data.get("document_id")
         material_id: Optional[str] = str(raw_mat_id) if raw_mat_id else None
         citations: List[Citation] = []
         rag_context: str = ""
         if material_id:
-            rag_context, citations = RAGService.get_grounded_context_and_citations(concept, material_id, db)
+            source_cites = seg.get("source_citations", []) or seg.get("citations", [])
+            chunk_ids = [c.get("chunk_id") if isinstance(c, dict) else getattr(c, "chunk_id", None) for c in source_cites]
+            chunk_ids = [cid for cid in chunk_ids if cid]
+            
+            if chunk_ids:
+                try:
+                    db_chunks = db.query(DBMaterialChunk).filter(DBMaterialChunk.id.in_(chunk_ids)).all()
+                    if db_chunks:
+                        context_blocks = []
+                        for chunk in db_chunks:
+                            ch_name = chunk.chapter or "Document Section"
+                            p_num = chunk.page or 1
+                            content = chunk.content or ""
+                            context_blocks.append(f"[{ch_name} - Page {p_num} (Chunk: {chunk.id})]:\n{content}")
+                            citations.append(Citation(
+                                chunk_id=chunk.id,
+                                chapter=ch_name,
+                                page=chunk.page or 1,
+                                section=chunk.section or "",
+                                quote=content[:200] + "..." if len(content) > 200 else content,
+                                snippet=content[:140] + "..." if len(content) > 140 else content,
+                                confidence=0.98
+                            ))
+                        rag_context = "\n\n".join(context_blocks)
+                except Exception as ex:
+                    logger.warning(f"Error querying cited chunk IDs ({ex}); falling back to semantic search.")
+
+            if not rag_context:
+                rag_context, retrieved_citations = RAGService.get_grounded_context_and_citations(concept, material_id, db)
+                if not citations:
+                    citations = retrieved_citations
 
         # 1. Try real LLM Segment Content Generation
         spoken_script = ""
@@ -382,14 +742,15 @@ Output a JSON object with this EXACT structure:
         try:
             system_prompt = (
                 f"You are Sahayak AI Teacher teaching '{concept}' to a {level} student in {active_lang}. "
-                "Deliver clear, intuitive, spoken teaching with vivid explanations, relatable intuition, and structured on-screen key takeaways."
+                f"{GROUNDING_GUARDRAIL_PROMPT} "
+                "Deliver clear, intuitive, spoken teaching with vivid explanations strictly grounded in the provided source material."
             )
             
             grounded_clause = ""
             if rag_context:
                 grounded_clause = (
-                    f"\n\nSource Material Context:\n{rag_context}\n"
-                    "CRITICAL: Teach ONLY from the facts provided in this source context. If a detail is missing, state so clearly."
+                    f"\n\nSource Material Context:\n{rag_context}\n\n"
+                    f"CRITICAL GROUNDING RULE: {GROUNDING_GUARDRAIL_PROMPT}"
                 )
 
             user_prompt = f"""Generate the teaching delivery content for this lesson segment:
@@ -401,7 +762,7 @@ Visual Style: {visual_type}
 
 Output JSON with:
 {{
-  "spoken_script": "Engaging, conversational monologue spoken by the AI teacher (approx 60-120 words).",
+  "spoken_script": "Engaging, conversational monologue spoken by the AI teacher (approx 60-120 words), grounded strictly in the source material.",
   "on_screen_text": "Structured whiteboard summary with emojis, bullet points, and key formulas/takeaways for the visual canvas."
 }}
 """

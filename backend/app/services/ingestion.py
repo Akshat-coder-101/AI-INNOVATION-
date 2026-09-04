@@ -1,12 +1,21 @@
 import io
+import os
 import uuid
 import re
+import logging
 from typing import List, Dict, Any, Tuple, Optional
 from pypdf import PdfReader
 import docx
 import pptx
 from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
 from ..database import DBMaterial, DBMaterialChunk
+from ..config import settings
+from .llm import LLMService
+
+logger = logging.getLogger("sahayak.ingestion")
+
+ALLOWED_EXTENSIONS = {"pdf", "docx", "pptx", "txt", "doc", "ppt"}
 
 def clean_text(text: str) -> str:
     text = re.sub(r'\s+', ' ', text)
@@ -30,6 +39,53 @@ def chunk_text(text: str, chunk_size_words: int = 250, overlap_words: int = 40) 
     return chunks
 
 class IngestionService:
+    @staticmethod
+    def validate_file(filename: str, content: bytes) -> str:
+        """Validates file presence, size limit, and supported extension."""
+        if not content or len(content) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded file is empty."
+            )
+        
+        max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+        if len(content) > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File exceeds maximum allowed size of {settings.MAX_UPLOAD_MB}MB."
+            )
+        
+        parts = filename.rsplit(".", 1)
+        if len(parts) < 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File has no extension. Allowed extensions: PDF, DOCX, PPTX, TXT."
+            )
+        
+        ext = parts[1].lower().strip()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file extension '.{ext}'. Allowed extensions: PDF, DOCX, PPTX, TXT."
+            )
+        return ext
+
+    @staticmethod
+    def save_file_safely(filename: str, content: bytes, ext: str) -> str:
+        """Saves file to DOC_STORAGE_DIR using a secure, traversal-safe random UUID name."""
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        storage_dir = os.path.join(backend_dir, settings.DOC_STORAGE_DIR)
+        os.makedirs(storage_dir, exist_ok=True)
+        safe_filename = f"{uuid.uuid4().hex}.{ext}"
+        target_path = os.path.join(storage_dir, safe_filename)
+        try:
+            with open(target_path, "wb") as f:
+                f.write(content)
+            return target_path
+        except Exception as e:
+            logger.warning(f"Could not persist upload to disk ({e}); proceeding in-memory.")
+            return ""
+
     @staticmethod
     def parse_pdf(file_bytes: bytes) -> List[Dict[str, Any]]:
         reader = PdfReader(io.BytesIO(file_bytes))
@@ -97,9 +153,48 @@ class IngestionService:
         return slides
 
     @classmethod
+    async def extract_title_and_topics(
+        cls, 
+        filename: str, 
+        preview_text: str, 
+        chapters: List[Dict[str, Any]]
+    ) -> Tuple[str, List[str]]:
+        """Uses a guarded LLM pass to extract detected title and key topics, with deterministic fallback."""
+        # 1. Fallback heuristic defaults
+        base_name = os.path.splitext(filename)[0].replace("_", " ").replace("-", " ").title()
+        fallback_title = chapters[0]["title"] if chapters and "Chapter" not in chapters[0]["title"] else base_name
+        fallback_topics = [ch["title"] for ch in chapters[:5] if "title" in ch and "Chapter" not in ch["title"]]
+        if not fallback_topics:
+            words = re.findall(r'\b[A-Z][a-z]{3,}\b', preview_text)
+            fallback_topics = list(dict.fromkeys(words))[:4] if words else [base_name, "Key Concepts", "Core Principles"]
+
+        # 2. Guarded LLM Extraction
+        try:
+            system_prompt = (
+                "You are an expert document indexer. Analyze the document excerpt and extract a concise document title "
+                "and 3 to 6 key educational topics covered. Return ONLY valid JSON: {\"detected_title\": \"...\", \"key_topics\": [\"...\"]}"
+            )
+            user_prompt = f"Filename: {filename}\n\nDocument Excerpt:\n{preview_text[:2000]}"
+            res = await LLMService.generate_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                schema_hint='{"detected_title": "...", "key_topics": ["Topic 1", "Topic 2"]}',
+                temperature=0.2
+            )
+            if res and isinstance(res, dict):
+                title = res.get("detected_title") or fallback_title
+                topics = res.get("key_topics") or fallback_topics
+                if isinstance(topics, list) and len(topics) > 0:
+                    return str(title).strip(), [str(t).strip() for t in topics if str(t).strip()]
+        except Exception as e:
+            logger.info(f"LLM title/topic extraction skipped/fallback: {e}")
+
+        return fallback_title, fallback_topics
+
+    @classmethod
     def process_file(cls, filename: str, content: bytes, db: Session) -> Dict[str, Any]:
         material_id = str(uuid.uuid4())
-        ext = filename.split(".")[-1].lower()
+        ext = filename.split(".")[-1].lower() if "." in filename else "txt"
         
         raw_chunks_with_meta: List[Dict[str, Any]] = []
         detected_chapters: List[Dict[str, Any]] = []
@@ -213,3 +308,28 @@ class IngestionService:
             "chapters": detected_chapters[:20],
             "preview": all_text[:300] + "..."
         }
+
+    @classmethod
+    async def process_document_upload(cls, filename: str, content: bytes, db: Session) -> Dict[str, Any]:
+        """Validates upload, stores securely, chunks, embeds, extracts title/topics, and returns canonical response."""
+        ext = cls.validate_file(filename, content)
+        cls.save_file_safely(filename, content, ext)
+        
+        ingest_res = cls.process_file(filename, content, db)
+        doc_id = ingest_res["material_id"]
+        
+        detected_title, key_topics = await cls.extract_title_and_topics(
+            filename=filename,
+            preview_text=ingest_res.get("preview", ""),
+            chapters=ingest_res.get("chapters", [])
+        )
+        
+        return {
+            "document_id": doc_id,
+            "filename": filename,
+            "page_count": max(1, ingest_res.get("total_pages_or_sections", 1)),
+            "chunk_count": ingest_res.get("chunks_count", 0),
+            "detected_title": detected_title,
+            "key_topics": key_topics
+        }
+

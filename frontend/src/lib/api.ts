@@ -1,11 +1,28 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api";
 
 export interface Citation {
+  chunk_id?: string;
   chapter: string;
   page?: number;
   section?: string;
+  quote?: string;
   snippet: string;
   confidence: number;
+}
+
+export interface SourceCitation {
+  chunk_id: string;
+  page?: number;
+  quote: string;
+}
+
+export interface DocumentUploadResponse {
+  document_id: string;
+  filename: string;
+  page_count: number;
+  chunk_count: number;
+  detected_title: string;
+  key_topics: string[];
 }
 
 export interface CheckpointQuestion {
@@ -26,6 +43,8 @@ export interface LessonSegmentPlan {
   visual_type: string;
   checkpoint_question: CheckpointQuestion;
   summary: string;
+  source_citations?: SourceCitation[];
+  citations?: Citation[];
 }
 
 export interface LessonPlan {
@@ -41,6 +60,7 @@ export interface LessonPlan {
     question_count: number;
   };
   material_id?: string;
+  document_id?: string;
 }
 
 export interface VisualSpec {
@@ -96,6 +116,8 @@ export interface QuizQuestion {
   options?: string[];
   correct_answer: string;
   explanation: string;
+  chunk_id?: string;
+  segment_id?: number;
 }
 
 export interface Quiz {
@@ -122,6 +144,13 @@ export interface QuizGradeResponse {
   results: QuestionGradeResult[];
 }
 
+export interface GapMapItem {
+  concept: string;
+  segment_id?: number;
+  citation?: Citation;
+  recommendation: string;
+}
+
 export interface LearningReport {
   session_id: string;
   user_id: string;
@@ -133,6 +162,7 @@ export interface LearningReport {
   misconceptions_encountered: string[];
   recommended_revision: string[];
   suggested_next_topics: string[];
+  gap_map?: GapMapItem[];
   generated_at: string;
 }
 
@@ -171,15 +201,65 @@ export interface LearnerProfile {
   weak_concepts: string[];
 }
 
+/**
+ * Universal response handler that parses canonical backend error shapes:
+ * { "error": { "code": string, "message": string, "path": string } }
+ */
+async function handleApiResponse<T = any>(res: Response, fallbackError: string): Promise<T> {
+  if (!res.ok) {
+    let errorMsg = fallbackError;
+    try {
+      const data = await res.json();
+      if (data?.error?.message) {
+        errorMsg = data.error.message;
+      } else if (typeof data?.detail === "string") {
+        errorMsg = data.detail;
+      } else if (data?.message) {
+        errorMsg = data.message;
+      }
+    } catch {
+      errorMsg = `${fallbackError} (Status ${res.status})`;
+    }
+    throw new Error(errorMsg);
+  }
+  return res.json();
+}
+
 export const api = {
+  // Document Upload & RAG Grounded Lessons
+  uploadDocument: async (file: File): Promise<DocumentUploadResponse> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE_URL}/documents/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    return handleApiResponse<DocumentUploadResponse>(res, "Failed to upload and vectorize document");
+  },
+
+  planLessonFromDocument: async (
+    documentId: string,
+    opts?: {
+      time_budget_minutes?: number;
+      language?: string;
+      learner_profile?: any;
+    }
+  ): Promise<LessonPlan> => {
+    const res = await fetch(`${API_BASE_URL}/documents/${encodeURIComponent(documentId)}/plan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts || {}),
+    });
+    return handleApiResponse<LessonPlan>(res, "Failed to generate grounded lesson from document");
+  },
+
   // Ingest
   ingestFile: async (formData: FormData) => {
     const res = await fetch(`${API_BASE_URL}/ingest`, {
       method: "POST",
       body: formData,
     });
-    if (!res.ok) throw new Error("Failed to ingest file");
-    return res.json();
+    return handleApiResponse(res, "Failed to ingest and parse file");
   },
 
   // Lesson
@@ -195,14 +275,12 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to create lesson plan");
-    return res.json();
+    return handleApiResponse<LessonPlan>(res, "Failed to create lesson plan");
   },
 
   getLessonPlan: async (sessionId: string): Promise<LessonPlan> => {
     const res = await fetch(`${API_BASE_URL}/lesson/plan/${sessionId}`);
-    if (!res.ok) throw new Error("Failed to fetch lesson plan");
-    return res.json();
+    return handleApiResponse<LessonPlan>(res, "Failed to fetch lesson plan");
   },
 
   renderSegment: async (
@@ -215,8 +293,7 @@ export const api = {
       `${API_BASE_URL}/lesson/segment/${segmentId}/render?session_id=${sessionId}${langParam}`,
       { method: "POST" }
     );
-    if (!res.ok) throw new Error("Failed to render segment");
-    return res.json();
+    return handleApiResponse<LessonSegmentRender>(res, "Failed to render lesson segment");
   },
 
   switchLanguage: async (payload: {
@@ -229,8 +306,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to switch language");
-    return res.json();
+    return handleApiResponse<LessonSegmentRender>(res, "Failed to switch audio/video language");
   },
 
   // Interactivity & Misconceptions
@@ -240,14 +316,15 @@ export const api = {
     student_answer: string;
     is_demo_mode?: boolean;
     force_misconception?: boolean;
+    hints_used?: number;
+    confidence_rating?: number;
   }): Promise<InteractionResponse> => {
     const res = await fetch(`${API_BASE_URL}/interact/answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to submit answer");
-    return res.json();
+    return handleApiResponse<InteractionResponse>(res, "Failed to submit checkpoint answer");
   },
 
   submitVoiceAnswer: async (formData: FormData): Promise<InteractionResponse> => {
@@ -255,8 +332,7 @@ export const api = {
       method: "POST",
       body: formData,
     });
-    if (!res.ok) throw new Error("Failed to evaluate voice answer");
-    return res.json();
+    return handleApiResponse<InteractionResponse>(res, "Failed to evaluate voice answer");
   },
 
   requestSimplification: async (
@@ -273,8 +349,7 @@ export const api = {
         user_query: query || "Can you explain this more simply with another analogy?",
       }),
     });
-    if (!res.ok) throw new Error("Failed to request simplification");
-    return res.json();
+    return handleApiResponse<InteractionResponse>(res, "Failed to request adaptive simplification");
   },
 
   runPythonCode: async (
@@ -286,8 +361,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code, timeout_seconds: timeoutSeconds }),
     });
-    if (!res.ok) throw new Error("Failed to execute code in sandbox");
-    return res.json();
+    return handleApiResponse(res, "Failed to execute Python sandbox code");
   },
 
   // Assessment & Report
@@ -295,8 +369,7 @@ export const api = {
     const res = await fetch(`${API_BASE_URL}/assess/quiz/${sessionId}`, {
       method: "POST",
     });
-    if (!res.ok) throw new Error("Failed to generate quiz");
-    return res.json();
+    return handleApiResponse<Quiz>(res, "Failed to generate comprehensive quiz");
   },
 
   gradeQuiz: async (payload: {
@@ -308,21 +381,18 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to grade quiz");
-    return res.json();
+    return handleApiResponse<QuizGradeResponse>(res, "Failed to grade assessment quiz");
   },
 
   getReport: async (sessionId: string): Promise<LearningReport> => {
     const res = await fetch(`${API_BASE_URL}/report/${sessionId}`);
-    if (!res.ok) throw new Error("Failed to fetch report");
-    return res.json();
+    return handleApiResponse<LearningReport>(res, "Failed to fetch mastery report");
   },
 
   // Profile & Path
   getProfile: async (userId: string = "default-user"): Promise<LearnerProfile> => {
     const res = await fetch(`${API_BASE_URL}/profile/${userId}`);
-    if (!res.ok) throw new Error("Failed to fetch profile");
-    return res.json();
+    return handleApiResponse<LearnerProfile>(res, "Failed to fetch learner profile");
   },
 
   getLearningPath: async (
@@ -332,8 +402,7 @@ export const api = {
     const res = await fetch(
       `${API_BASE_URL}/learning-path/${encodeURIComponent(topicId)}?user_id=${userId}`
     );
-    if (!res.ok) throw new Error("Failed to fetch learning path");
-    return res.json();
+    return handleApiResponse<LearningPath>(res, "Failed to fetch pedagogical learning path");
   },
 
   togglePathNode: async (
@@ -347,7 +416,40 @@ export const api = {
       )}/toggle-node/${nodeId}?user_id=${userId}`,
       { method: "POST" }
     );
-    if (!res.ok) throw new Error("Failed to toggle node");
-    return res.json();
+    return handleApiResponse<LearningPath>(res, "Failed to toggle learning node completion");
+  },
+
+  // YouTube Grounded Video Recommendations
+  getRelatedVideos: async (
+    topic: string,
+    language: string = "en",
+    opts?: { segment_id?: number; session_id?: string; context?: string }
+  ): Promise<RelatedVideosResponse> => {
+    const params = new URLSearchParams({
+      topic,
+      language,
+      ...(opts?.segment_id ? { segment_id: String(opts.segment_id) } : {}),
+      ...(opts?.session_id ? { session_id: opts.session_id } : {}),
+      ...(opts?.context ? { context: opts.context } : {}),
+    });
+    const res = await fetch(`${API_BASE_URL}/videos/recommend?${params.toString()}`);
+    return handleApiResponse<RelatedVideosResponse>(res, "Failed to fetch related educational videos");
   },
 };
+
+export interface RelatedVideo {
+  video_id: string;
+  title: string;
+  channel: string;
+  thumbnail_url: string;
+  embed_url: string;
+  watch_url: string;
+  duration: string;
+}
+
+export interface RelatedVideosResponse {
+  source: "youtube" | "cache" | "fallback";
+  videos: RelatedVideo[];
+  search_url: string;
+}
+

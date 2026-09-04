@@ -106,6 +106,12 @@ class DBLearningPath(Base):
     progress_percentage: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=get_utc_now, onupdate=get_utc_now)
 
+class DBYouTubeCache(Base):
+    __tablename__ = "youtube_cache"
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=get_utc_now)
+
 # Engine initialization
 engine = create_engine(
     settings.DATABASE_URL,

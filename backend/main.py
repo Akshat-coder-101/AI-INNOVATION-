@@ -12,25 +12,43 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     getattr(sys.stderr, "reconfigure")(encoding="utf-8")
 
-from fastapi import FastAPI
+from typing import Any, Optional
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, FileResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import init_db
-from app.api import ingest, lesson, interact, assess, report, profile, learning_path, media, sandbox, health
+from app.api import ingest, lesson, interact, assess, report, profile, learning_path, media, sandbox, health, videos, documents
 
 logger = logging.getLogger("sahayak.main")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+def make_canonical_error(code: str, message: str, path: str, status_code: int, details: Any = None) -> JSONResponse:
+    """Helper to return uniform JSON error responses across the entire application."""
+    content: dict = {
+        "error": {
+            "code": code,
+            "message": message,
+            "path": path,
+        }
+    }
+    if details:
+        content["error"]["details"] = details
+    return JSONResponse(status_code=status_code, content=content)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize database tables on startup
     init_db()
     
-    # Ensure generated media directory exists
+    # Ensure generated media and document storage directories exist
     media_dir = os.path.join(backend_dir, settings.MEDIA_DIR)
     os.makedirs(media_dir, exist_ok=True)
+    doc_dir = os.path.join(backend_dir, settings.DOC_STORAGE_DIR)
+    os.makedirs(doc_dir, exist_ok=True)
     
     # Startup Provider Diagnostic Report
     print("=" * 65)
@@ -73,15 +91,93 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount media static directory for serving synthesized audio & assets
-media_storage_path = os.path.join(backend_dir, settings.MEDIA_DIR)
-os.makedirs(media_storage_path, exist_ok=True)
-app.mount("/media", StaticFiles(directory=media_storage_path), name="media")
-
 # Register API Routers (with /api prefix and root aliases)
-for router_module in [ingest, lesson, interact, assess, report, profile, learning_path, media, sandbox, health]:
+for router_module in [ingest, lesson, interact, assess, report, profile, learning_path, media, sandbox, health, videos, documents]:
     app.include_router(router_module.router, prefix=settings.API_PREFIX)
     app.include_router(router_module.router)
+
+# ---------------------------------------------------------------------------
+# Media File Serving & Traversal Protection (Section G)
+# ---------------------------------------------------------------------------
+@app.get("/media/{filepath:path}")
+async def serve_media_file(filepath: str, request: Request):
+    """
+    Securely serves generated media files (mp3, mp4, png, webp).
+    Guards against directory traversal and returns canonical JSON 404/403.
+    """
+    resolved_base = os.path.realpath(os.path.join(backend_dir, settings.MEDIA_DIR))
+    target_path = os.path.realpath(os.path.join(resolved_base, filepath.lstrip("/")))
+    
+    # Guard against path traversal
+    if not (target_path.startswith(resolved_base + os.sep) or target_path == resolved_base):
+        return make_canonical_error(
+            code="forbidden",
+            message="Access denied: Invalid file path traversal",
+            path=request.url.path,
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    if not os.path.exists(target_path) or not os.path.isfile(target_path):
+        return make_canonical_error(
+            code="media_not_found",
+            message=f"Media file '{filepath}' was not found.",
+            path=request.url.path,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    return FileResponse(target_path)
+
+# ---------------------------------------------------------------------------
+# Canonical JSON Exception Handlers (Section G)
+# ---------------------------------------------------------------------------
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    code_map = {
+        400: "bad_request",
+        401: "unauthorized",
+        403: "forbidden",
+        404: "not_found",
+        405: "method_not_allowed",
+        409: "conflict",
+        422: "unprocessable_entity",
+        429: "rate_limit_exceeded",
+        500: "internal_error",
+    }
+    code = code_map.get(exc.status_code, "http_error")
+    message = str(exc.detail) if exc.detail else "An HTTP error occurred."
+    return make_canonical_error(
+        code=code,
+        message=message,
+        path=request.url.path,
+        status_code=exc.status_code
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    error_msgs = []
+    for err in exc.errors():
+        loc = " -> ".join([str(l) for l in err.get("loc", []) if l != "body"])
+        msg = err.get("msg", "Invalid value")
+        error_msgs.append(f"{loc}: {msg}" if loc else msg)
+    summary = "; ".join(error_msgs) if error_msgs else "Invalid request payload"
+    
+    return make_canonical_error(
+        code="validation_error",
+        message=f"Validation failed: {summary}",
+        path=request.url.path,
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        details=[{"loc": err.get("loc"), "msg": err.get("msg"), "type": err.get("type")} for err in exc.errors()]
+    )
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled exception on {request.method} {request.url.path}: {exc}")
+    return make_canonical_error(
+        code="internal_error",
+        message="An unexpected internal server error occurred. Please try again later.",
+        path=request.url.path,
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
 
 @app.get("/")
 def root():

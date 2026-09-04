@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 interface AudioReactiveAvatarProps {
   audioRef?: React.RefObject<HTMLAudioElement | null>;
@@ -25,13 +26,14 @@ export default function AudioReactiveAvatar({
   const animFrameRef = useRef<number | null>(null);
   const [amplitude, setAmplitude] = useState<number>(0);
 
-  // Initialize Web Audio API Analyser
+  // Initialize Web Audio API Analyser safely without blocking native audio output
   useEffect(() => {
-    if (!audioRef?.current) return;
-
-    const audioElement = audioRef.current;
+    let isCancelled = false;
 
     const setupAudioContext = () => {
+      if (typeof window === "undefined" || !audioRef?.current) return;
+      const audioElement = audioRef.current;
+
       try {
         if (!audioCtxRef.current) {
           const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -40,7 +42,7 @@ export default function AudioReactiveAvatar({
         }
 
         if (audioCtxRef.current.state === "suspended") {
-          audioCtxRef.current.resume();
+          audioCtxRef.current.resume().catch(() => {});
         }
 
         if (!analyserRef.current && audioCtxRef.current) {
@@ -49,31 +51,47 @@ export default function AudioReactiveAvatar({
           analyser.smoothingTimeConstant = 0.8;
           analyserRef.current = analyser;
 
-          if (!sourceRef.current) {
+          if (!sourceRef.current && audioElement) {
             try {
               const source = audioCtxRef.current.createMediaElementSource(audioElement);
               source.connect(analyser);
               analyser.connect(audioCtxRef.current.destination);
               sourceRef.current = source;
             } catch (e) {
-              // Element might already be connected
+              // If already connected or CORS protected, continue gracefully
             }
           }
         }
       } catch (err) {
-        console.warn("[AudioReactiveAvatar] Web Audio init error:", err);
+        console.warn("[AudioReactiveAvatar] AudioContext init note:", err);
       }
     };
 
-    const handlePlay = () => setupAudioContext();
-    audioElement.addEventListener("play", handlePlay);
+    const handleUserUnlock = () => {
+      if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+    };
 
-    if (isPlaying) {
-      setupAudioContext();
+    window.addEventListener("click", handleUserUnlock, { passive: true });
+    window.addEventListener("touchstart", handleUserUnlock, { passive: true });
+    window.addEventListener("keydown", handleUserUnlock, { passive: true });
+
+    if (audioRef?.current) {
+      audioRef.current.addEventListener("play", setupAudioContext);
+      if (isPlaying) {
+        setupAudioContext();
+      }
     }
 
     return () => {
-      audioElement.removeEventListener("play", handlePlay);
+      isCancelled = true;
+      window.removeEventListener("click", handleUserUnlock);
+      window.removeEventListener("touchstart", handleUserUnlock);
+      window.removeEventListener("keydown", handleUserUnlock);
+      if (audioRef?.current) {
+        audioRef.current.removeEventListener("play", setupAudioContext);
+      }
     };
   }, [audioRef, isPlaying]);
 
@@ -147,10 +165,13 @@ export default function AudioReactiveAvatar({
         <div 
           className="relative w-full h-full rounded-full overflow-hidden border-2 border-neutral-900 bg-neutral-900 z-10"
         >
-          <img
+          <Image
             src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=400&auto=format&fit=crop"
             alt={name}
-            className="w-full h-full object-cover object-center"
+            fill
+            sizes="160px"
+            className="object-cover object-center"
+            priority
           />
         </div>
       </div>

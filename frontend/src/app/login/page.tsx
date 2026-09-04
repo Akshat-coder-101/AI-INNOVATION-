@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth, PRESET_USERS, UserSession } from "@/context/AuthContext";
 import { 
@@ -201,11 +202,16 @@ export default function LoginPage() {
                       : "bg-white border-border hover:border-primary/50 hover:bg-canvas-elevated"
                   }`}
                 >
-                  <img
-                    src={preset.avatar}
-                    alt={preset.name}
-                    className="w-10 h-10 rounded-full object-cover border border-border"
-                  />
+                  <div className="relative w-10 h-10 rounded-full overflow-hidden border border-border shrink-0">
+                    <Image
+                      src={preset.avatar}
+                      alt={preset.name}
+                      width={40}
+                      height={40}
+                      className="w-full h-full object-cover"
+                      unoptimized
+                    />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-xs text-black truncate">{preset.name}</span>

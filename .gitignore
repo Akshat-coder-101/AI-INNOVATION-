@@ -52,9 +52,11 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Media storage
+# Media & document storage
 backend/generated_media/
 generated_media/
+backend/uploaded_docs/
+uploaded_docs/
 *.mp4
 *.mp3
 *.wav

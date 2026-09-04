@@ -2,7 +2,7 @@ import json
 import re
 import logging
 import httpx
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 from ..config import settings
 
 logger = logging.getLogger("sahayak.llm")
@@ -276,8 +276,10 @@ class LLMService:
         cls,
         system_prompt: str,
         user_prompt: str,
-        schema_hint: Optional[str] = None,
-        temperature: float = 0.2
+        schema_hint: Optional[Union[str, Dict[str, Any]]] = None,
+        response_schema: Optional[Union[str, Dict[str, Any]]] = None,
+        temperature: float = 0.2,
+        **kwargs: Any
     ) -> Any:
         """
         Calls generate_response(), strips markdown code fences, parses JSON,
@@ -285,8 +287,10 @@ class LLMService:
         Raises LLMUnavailable on unrecoverable failure.
         """
         system_instruction = (system_prompt or "") + "\nCRITICAL: You must output ONLY valid RFC8259 JSON. No markdown fences, no explanatory text, no HTML."
-        if schema_hint:
-            system_instruction += f"\nJSON Schema Expected:\n{schema_hint}"
+        effective_schema = schema_hint if schema_hint is not None else response_schema
+        if effective_schema:
+            schema_str = json.dumps(effective_schema) if isinstance(effective_schema, dict) else str(effective_schema)
+            system_instruction += f"\nJSON Schema Expected:\n{schema_str}"
 
         raw_output = ""
         try:
