@@ -33,12 +33,27 @@ class IngestResponse(BaseModel):
     chapters: List[Dict[str, Any]]
     preview: str
 
+class DocumentUploadResponse(BaseModel):
+    document_id: str
+    filename: str
+    page_count: int
+    chunk_count: int
+    detected_title: str
+    key_topics: List[str]
+
 class Citation(BaseModel):
+    chunk_id: Optional[str] = None
     chapter: str = "General"
     page: Optional[int] = None
     section: Optional[str] = None
+    quote: Optional[str] = None
     snippet: str = ""
     confidence: float = 0.95
+
+class SourceCitation(BaseModel):
+    chunk_id: str
+    page: Optional[int] = 1
+    quote: str
 
 # --- Lesson Planner Schemas ---
 class CheckpointQuestion(BaseModel):
@@ -58,6 +73,8 @@ class LessonSegmentPlan(BaseModel):
     visual_type: str = "labeled-diagram" # equation/graph | labeled-diagram | timeline/map | code+execution
     checkpoint_question: CheckpointQuestion
     summary: str = ""
+    source_citations: List[SourceCitation] = []
+    citations: List[Citation] = []
 
 class FinalAssessmentSpec(BaseModel):
     type: str = "quiz"
@@ -74,10 +91,12 @@ class LessonPlan(BaseModel):
     segments: List[LessonSegmentPlan]
     final_assessment: FinalAssessmentSpec
     material_id: Optional[str] = None
+    document_id: Optional[str] = None
 
 class LessonPlanRequest(BaseModel):
     topic: Optional[str] = None
     material_id: Optional[str] = None
+    document_id: Optional[str] = None
     learner_profile: Optional[LearnerProfileCreate] = None
     time_budget_minutes: Optional[int] = 20
     language: Optional[str] = "en"
@@ -146,6 +165,8 @@ class StudentAnswerRequest(BaseModel):
     student_answer: str
     is_demo_mode: bool = False
     force_misconception: bool = False
+    hints_used: Optional[int] = 0
+    confidence_rating: Optional[int] = None
 
 class InteractionResponse(BaseModel):
     action: str
@@ -175,6 +196,8 @@ class QuizQuestion(BaseModel):
     options: Optional[List[str]] = None
     correct_answer: str
     explanation: str
+    chunk_id: Optional[str] = None
+    segment_id: Optional[int] = None
 
 class Quiz(BaseModel):
     quiz_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -201,6 +224,12 @@ class QuizGradeResponse(BaseModel):
     score_percentage: float
     results: List[QuestionGradeResult]
 
+class GapMapItem(BaseModel):
+    concept: str
+    segment_id: Optional[int] = None
+    citation: Optional[Citation] = None
+    recommendation: str
+
 class LearningReport(BaseModel):
     session_id: str
     user_id: str
@@ -212,6 +241,7 @@ class LearningReport(BaseModel):
     misconceptions_encountered: List[str]
     recommended_revision: List[str]
     suggested_next_topics: List[str]
+    gap_map: List[GapMapItem] = []
     generated_at: datetime = Field(default_factory=get_utc_now)
 
 # --- Learning Path Curriculum DAG ---

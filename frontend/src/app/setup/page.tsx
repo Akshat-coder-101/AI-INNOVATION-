@@ -11,9 +11,11 @@ import {
   Sliders, 
   ArrowRight
 } from "lucide-react";
+import { useToast } from "@/context/ToastContext";
 
 function SetupForm() {
   const router = useRouter();
+  const { showSuccess, showError } = useToast();
   const searchParams = useSearchParams();
   const initialTopic = searchParams.get("topic") || "Foundations of Quantum Mechanics";
   const materialId = searchParams.get("materialId") || undefined;
@@ -44,9 +46,11 @@ function SetupForm() {
         language,
       });
 
+      showSuccess("Personalized lesson generated successfully!");
       router.push(`/lesson/${plan.session_id}`);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      const msg = err.message || "Failed to initialize lesson plan";
+      showError(msg);
       setIsGenerating(false);
     }
   };

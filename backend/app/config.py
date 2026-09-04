@@ -29,14 +29,24 @@ class Settings(BaseSettings):
     DEEPGRAM_API_KEY: str = os.getenv("DEEPGRAM_API_KEY", "")
     DEEPGRAM_MODEL: str = os.getenv("DEEPGRAM_MODEL", "nova-2")
     
-    # Avatar
-    AVATAR_PROVIDER: str = os.getenv("AVATAR_PROVIDER", "free_avatar")  # free_avatar | huggingface | colossyan | did | heygen
-    HUGGINGFACE_API_KEY: str = os.getenv("HUGGINGFACE_API_KEY", "")     # Free token from huggingface.co
-    COLOSSYAN_API_KEY: str = os.getenv("COLOSSYAN_API_KEY", "")
+    # Avatar & Video Generation (Free + Paid Provider Suite)
+    # Options: free_avatar | did | heygen | synthesia | tavus | hedra | colossyan | replicate | huggingface
+    AVATAR_PROVIDER: str = os.getenv("AVATAR_PROVIDER", "free_avatar")
+    
+    # Paid Provider API Keys & Settings
     DID_API_KEY: str = os.getenv("DID_API_KEY", "")
     HEYGEN_API_KEY: str = os.getenv("HEYGEN_API_KEY", "")
-    CRAFTSTORY_API_KEY: str = os.getenv("CRAFTSTORY_API_KEY", "")
+    SYNTHESIA_API_KEY: str = os.getenv("SYNTHESIA_API_KEY", "")
+    TAVUS_API_KEY: str = os.getenv("TAVUS_API_KEY", "")
+    TAVUS_REPLICA_ID: str = os.getenv("TAVUS_REPLICA_ID", "r79e1c0369")
+    HEDRA_API_KEY: str = os.getenv("HEDRA_API_KEY", "")
+    COLOSSYAN_API_KEY: str = os.getenv("COLOSSYAN_API_KEY", "")
+    REPLICATE_API_TOKEN: str = os.getenv("REPLICATE_API_TOKEN", "")
+    HUGGINGFACE_API_KEY: str = os.getenv("HUGGINGFACE_API_KEY", "")
+    
     AVATAR_DEFAULT_ID: str = os.getenv("AVATAR_DEFAULT_ID", "amy-j37u")
+    TEACHER_IMAGE_URL: str = os.getenv("TEACHER_IMAGE_URL", "")
+
     
     # Database & Vector DB
     DATABASE_URL: str = os.getenv(
@@ -52,12 +62,18 @@ class Settings(BaseSettings):
     
     # Media & Storage
     MEDIA_DIR: str = os.getenv("MEDIA_DIR", "generated_media")
+    DOC_STORAGE_DIR: str = os.getenv("DOC_STORAGE_DIR", "uploaded_docs")
     
     # App & CORS
     NEXT_PUBLIC_APP_URL: str = os.getenv("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
     DEFAULT_LANGUAGE: str = os.getenv("DEFAULT_LANGUAGE", "en")
     SUPPORTED_LANGUAGES: str = os.getenv("SUPPORTED_LANGUAGES", "en,hi,hinglish,ta,te,bn,es")
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "25"))
+    
+    # YouTube Data API (Related Video Grounding)
+    YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
+    YOUTUBE_MAX_RESULTS: int = int(os.getenv("YOUTUBE_MAX_RESULTS", "3"))
+    YOUTUBE_CACHE_TTL_HOURS: int = int(os.getenv("YOUTUBE_CACHE_TTL_HOURS", "168"))
     
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
 

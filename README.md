@@ -1,5 +1,5 @@
 # Sahayak AI Teacher 🎓
-### AI Innovation Hackathon 2026 · Round 2 Technical Assessment Submission
+### AI Innovation Hackathon 2026 · Technical Submission
 **Track**: *AI Teacher: Build a Human-Like AI Educator That Teaches Through Video*
 
 > **"A True Adaptive AI Teacher, Not Just Another Chatbot."**
@@ -9,20 +9,20 @@
 [![Next.js 15](https://img.shields.io/badge/frontend-Next.js%2015-black.svg)](https://nextjs.org/)
 [![React 19](https://img.shields.io/badge/ui-React%2019-61dafb.svg)](https://react.dev/)
 [![TailwindCSS](https://img.shields.io/badge/styling-TailwindCSS-38bdf8.svg)](https://tailwindcss.com/)
-[![Piper TTS](https://img.shields.io/badge/offline%20voice-Piper%20TTS-4f46e5.svg)](https://github.com/rhasspy/piper)
+[![YouTube Data API](https://img.shields.io/badge/grounding-YouTube%20API%20v3-red.svg)](https://developers.google.com/youtube/v3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
 ## 🧭 1. Problem Statement
 
-Traditional digital learning platforms generally deliver static pre-recorded lectures or text-based chat windows. However, real pedagogy does not work through walls of dumped text:
-* A real human educator diagnoses prior knowledge and calibrates depth.
-* Plans a structured cognitive progression (curriculum).
-* Explains orally while dynamically illustrating on a blackboard.
-* Periodically pauses for checkpoint concept checks.
-* Catches misconceptions, diagnoses root cause errors, and reteaches adaptively using fresh analogies.
-* Verifies mastery with assessments and diagnostics.
+Traditional digital learning platforms typically deliver static pre-recorded videos or generic text chatbots. However, effective pedagogy requires active, adaptive teaching:
+* **Diagnoses prior knowledge** and dynamically calibrates depth and pacing.
+* **Plans a structured cognitive progression** grounded strictly in verified source materials.
+* **Explains orally with synchronized visual illustrations** on an interactive blackboard.
+* **Periodically pauses for pedagogical checkpoints** to test comprehension.
+* **Detects misconceptions**, identifies cognitive root causes, and reteaches adaptively using fresh analogies and alternate visual modalities.
+* **Validates mastery** with document-attributed quizzes and a diagnostic learning gap map.
 
 **Sahayak AI Teacher** is an autonomous pedagogical educator that replaces conversational chatbots with an end-to-end interactive, animated teaching video and adaptive state machine experience.
 
@@ -30,36 +30,43 @@ Traditional digital learning platforms generally deliver static pre-recorded lec
 
 ## 💡 2. Solution Overview
 
-Sahayak transforms any uploaded educational document (textbook PDF, DOCX, PPTX, lecture notes) or user-specified topic into an immersive, personalized, animated classroom session:
+Sahayak transforms any uploaded educational document (textbook PDF, DOCX, PPTX, lecture notes) or user-specified topic into an immersive, personalized, video-augmented classroom session:
 
-```
-[Document / Topic] ──▶ [RAG Grounding & Plan] ──▶ [Multi-Scene Video & Avatar] ──▶ [Interactive Q&A] ──▶ [Adaptive Reteaching] ──▶ [Mastery Report]
+```mermaid
+flowchart LR
+    A[📄 Upload Document / Topic] --> B[🔍 RAG Ingest & Chunking]
+    B --> C[🧠 Grounded Lesson Plan]
+    C --> D[🎬 Multi-Scene Video / Avatar]
+    D --> E[❓ Concept Checkpoints]
+    E -->|Misconception| F[🔄 Adaptive Reteach Loop]
+    E -->|Mastery| G[🎯 Adaptive Quiz & Gap Map]
+    F --> D
 ```
 
-### Key Highlights:
-1. **Multi-Scene Animated Teaching Video**: Local Ken Burns (`zoompan`) motion, progressive reveal slides, synced captions, and burned-in subtitles.
-2. **Audio-Reactive Real-Time Avatar**: Browser-side HTML5 Canvas presenter whose mouth articulates in real time synced to speech amplitude via Web Audio `AnalyserNode`.
-3. **Hierarchical Speech Engine**: ElevenLabs Neural Voice $\rightarrow$ Local Offline Piper Neural TTS $\rightarrow$ Browser Web Speech fallback.
-4. **Semantic Misconception Diagnosis**: Evaluator classifies root causes and triggers dynamic remediation loops with distinct analogies and alternate visual routers.
-5. **Subject-Aware Visual Blackboards**: LaTeX formulas, coordinate Cartesian plots, Python 3 isolated sandbox execution, SVG diagrams, and chronological roadmaps.
-6. **7-Language Multilingual Support**: In-flight switching across English, Hindi, Hinglish, Tamil, Telugu, Bengali, and Spanish.
-7. **Strict RAG Grounding**: 768-dim embeddings with verbatim chapter, section, and page citations.
+### Core Innovations:
+1. **Document-Grounded Lesson Pipeline**: Every lesson segment, video explanation, and quiz question is strictly attributed to source document chunks with verbatim citations, page numbers, and confidence ratings.
+2. **Multi-Provider AI Avatar & Video Engine**: Supports **D-ID**, **HeyGen**, **Synthesia**, **Tavus**, **Colossyan**, **Replicate (LivePortrait)**, **Hugging Face SDXL**, and a built-in **Zero-Cost Audio-Reactive Canvas Avatar**.
+3. **AI-Curated YouTube Educational Grounding**: Leverages YouTube Data API v3 with SQLite caching and LLM re-ranking to embed real, verified video deep-dives without hallucinations.
+4. **Interactive Domain Blackboards**: Real-time LaTeX mathematics, coordinate Cartesian plots, isolated Python 3 execution sandboxes, and SVG diagrams.
+5. **Hierarchical Multilingual Speech**: ElevenLabs Neural Voice $\rightarrow$ Local Offline Piper Neural TTS $\rightarrow$ Web Speech API fallback across **7 languages** (English, Hindi, Hinglish, Tamil, Telugu, Bengali, Spanish).
+6. **Diagnostic Learning Gap Map**: Pinpoints conceptual strengths and weaknesses linked directly to document source chunks with actionable revision steps.
 
 ---
 
-## 🌟 3. Key Features
+## 🌟 3. Feature Matrix
 
 | Feature | Capability | Implementation |
 |---|---|---|
-| **Multi-Scene Video** | 16:9 MP4 explainer video with progressive reveals & Ken Burns effect | FFmpeg `zoompan` + `xfade` + Pillow/Matplotlib |
+| **Document RAG Ingest** | Validates & parses PDF, DOCX, PPTX, and TXT with chunk indexing | `pypdf`, `python-docx`, `python-pptx`, Gemini / Pinecone Vector RAG |
+| **Grounded Lesson Planner** | Full-coverage curriculum planning strictly bounded to document chunks | `TeacherAgentStateMachine.plan_from_document` |
 | **Talking AI Presenter** | Real-time mouth articulation & blinking synced to audio waveforms | Web Audio API (`AnalyserNode`) + HTML5 Canvas |
-| **Offline Voice Narration** | Free local neural voice without external API costs or quotas | `piper-tts` (ONNX `en_US-lessac-medium`) |
-| **Misconception Detection** | Pinpoints conceptual vs. arithmetic errors; prevents duplicate analogies | `EvaluatorService` + analogies memory bank |
-| **Adaptive Blackboard** | Switches visual type (diagram $\rightarrow$ graph $\rightarrow$ sandbox) on reteach | Dynamic `VisualRouter` |
-| **Code Execution** | Isolated Python 3 execution sandbox for computer science concepts | Subprocess runner (`/api/sandbox/run`) |
+| **Paid Avatar & Video Suite** | Generates photorealistic teacher video lectures from scripts | D-ID, HeyGen, Synthesia, Tavus, Colossyan, Replicate |
+| **Curated YouTube Grounding** | Retrieves verified, duration-matched concept explainer videos | YouTube Data API v3 + SQLite Cache |
+| **Misconception Diagnosis** | Pinpoints conceptual errors and triggers dynamic remediation loops | `EvaluatorService` + analogy memory bank |
+| **Adaptive Blackboard** | Switches visual type (diagram $\rightarrow$ graph $\rightarrow$ sandbox) on reteach | Dynamic `VisualRouter` (KaTeX, SVG, Recharts, Python) |
+| **Python Code Sandbox** | Isolated Python 3 code execution for computer science concepts | Subprocess runner (`/api/sandbox/run`) |
 | **Voice Q&A** | Real-time speech-to-text for oral student checkpoint responses | Deepgram Nova-2 |
-| **RAG Citations** | Clickable Coursera-style citation chips with confidence % and page tags | Gemini embeddings / deterministic cosine RAG |
-| **Learning Path DAG** | Multi-session prerequisite graph visualization | Interactive React DAG with node status |
+| **Diagnostic Gap Map** | Visual mastery breakdown tagged with Bloom's taxonomy & source chunks | `AssessmentService.build_learning_report` |
 
 ---
 
@@ -67,39 +74,48 @@ Sahayak transforms any uploaded educational document (textbook PDF, DOCX, PPTX, 
 
 ```mermaid
 graph TD
-    subgraph Client ["Frontend (Next.js 15 App Router)"]
+    subgraph Client ["Frontend (Next.js 15 App Router + React 19)"]
         UI[Theater Mode Classroom / Split View]
+        Upload[Document Drag & Drop Ingestion]
         Avatar[Audio-Reactive Canvas Avatar]
+        YTComp[Curated YouTube Video Player]
         VoiceIn[Deepgram Nova-2 Mic Capture]
         DAG[Learning Path DAG Explorer]
-        Notes[Notes & Citations Slide Drawer]
+        GapMap[Diagnostic Gap Map Report]
     end
 
     subgraph Backend ["FastAPI Core Engine"]
         FSM[Teacher Agent State Machine]
-        LLMRouter[Multi-LLM Router: Groq / Gemini / Claude]
+        ING[Multi-Format RAG Ingestion Service]
+        LLMRouter[Multi-LLM Router: Gemini / Groq / Anthropic]
         Eval[Semantic Misconception Evaluator]
         VR[Domain Visual Routers: Math / Bio / Code / History]
         Sandbox[Python 3 Execution Sandbox]
-        VideoGen[Multi-Scene Video Generator]
+        AvatarService[Avatar Engine: D-ID / HeyGen / Synthesia / Tavus / Canvas]
         TTS[Hierarchical TTS: ElevenLabs / Piper / WebSpeech]
-        RAG[Zero-Hallucination Vector RAG]
+        YTRouter[YouTube Data API Grounding Service]
+        Assess[Adaptive Quiz & Gap Map Engine]
     end
 
-    subgraph Storage ["Data & Storage Layer"]
+    subgraph Storage ["Persistence & Vector Layer"]
         DB[(SQLite / PostgreSQL DB)]
-        Media[(Static Media Storage)]
+        VEC[(Pinecone / SQLite Vector Store)]
+        Media[(Static Media & Uploads Storage)]
     end
 
+    Upload -->|Upload PDF/DOCX/PPTX/TXT| ING
+    ING -->|Chunk & Embed| VEC
+    ING -->|Material Metadata| DB
     UI <-->|REST / SSE Streaming| Backend
-    Avatar <-->|Web Audio AnalyserNode| UI
+    FSM --> ING
     FSM --> LLMRouter
     FSM --> VR
     FSM --> Eval
-    FSM --> VideoGen
-    VideoGen --> TTS
-    VideoGen --> Media
-    RAG --> DB
+    FSM --> AvatarService
+    FSM --> YTRouter
+    FSM --> Assess
+    AvatarService --> Media
+    TTS --> Media
     Sandbox --> VR
 ```
 
@@ -111,73 +127,52 @@ The pedagogical lifecycle implements a formal Finite State Machine (FSM):
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Understand: Ingest Topic or Uploaded Document
-    Understand --> Plan: Calibrate Learner Level, Style & Time Budget
-    Plan --> Explain: Generate Multi-Scene Lecture & Timed Captions
-    Explain --> Demonstrate: Render Domain Visual Blackboard (LaTeX / Plot / Code / SVG)
+    [*] --> Ingest: Ingest Topic or Uploaded Document
+    Ingest --> Plan: Calibrate Learner Level, Style & Document Chunk Coverage
+    Plan --> Explain: Generate Multi-Scene Lecture, Citations & Timed Captions
+    Explain --> Demonstrate: Render Domain Blackboard (LaTeX / Plot / Code / SVG)
     Demonstrate --> Question: Interactive Checkpoint (MCQ / Voice STT)
     Question --> Evaluate: Diagnose Understanding & Classify Errors
     Evaluate --> Adapt: Misconception Detected (Switch Visual & Inject Fresh Analogy)
     Adapt --> Explain: Reteach Remediation Loop
     Evaluate --> Continue: Concept Mastered (Advance Curriculum Segment)
     Continue --> Assess: All Segments Completed
-    Assess --> Report: Generate Pedagogical Learning Report & Mastery Score
-    Report --> [*]: Recommend Revision & Next Prerequisites
+    Assess --> Report: Generate Diagnostic Gap Map & Source Chunk Attributions
+    Report --> [*]: Recommend Targeted Revision
 ```
 
 ---
 
-## 📚 6. RAG & Grounded Knowledge Pipeline
+## 📚 6. Document-Grounded RAG Pipeline
 
-1. **Multi-Format Document Ingestion**:
-   * PDF via `pypdf`
-   * DOCX via `python-docx`
-   * PPTX via `python-pptx`
-   * TXT / Markdown
-2. **Semantic Chunking**: 250–300 words with 40-word semantic overlap; preserves chapter headings, page numbers, and slide metadata.
-3. **Vector Embeddings**: 768-dimensional embeddings (Gemini `text-embedding-004` with deterministic fallback).
-4. **Citation Verification**: Every retrieved chunk is surfaced in the classroom UI as a clickable `CitationChip` displaying chapter, page, snippet, and confidence match.
-
----
-
-## 🎯 7. Personalization Approach
-
-| Dimension | Options Supported | Effect on Lesson Architecture |
-|---|---|---|
-| **Cognitive Level** | Beginner, Intermediate, Advanced | Controls vocabulary depth, mathematical rigor, and step derivations. |
-| **Time Budget** | 5 Min, 20 Min, 60 Min, 7-Day Path | Adjusts segment count (2 segments $\rightarrow$ 4 segments $\rightarrow$ 6 segments $\rightarrow$ Multi-Session DAG). |
-| **Pedagogical Style** | Visual, Analogies, Socratic, Code | Tailors dominant visual router and script explanation strategies. |
-| **Language** | `en`, `hi`, `hinglish`, `ta`, `te`, `bn`, `es` | Re-synthesizes speech, on-screen text, blackboard labels, and quizzes. |
+1. **Multi-Format Ingestion**: Parses `.pdf`, `.docx`, `.pptx`, and `.txt` files securely.
+2. **Safe Storage & Chunking**: Stores files under unique UUID directories and splits content into 250–300 word chunks with 40-word semantic overlap.
+3. **Vector Embeddings**: Generates 768-dimensional embeddings using Gemini `text-embedding-004` (with deterministic cosine similarity fallback).
+4. **Full-Document Coverage Planning**: Partitions document chunks evenly across lesson segments to guarantee complete coverage without omission.
+5. **Verbatim Grounding & Citations**: Every segment explanation re-retrieves its cited chunks and prompts the LLM:
+   > *"Teach ONLY from the provided source material. Cite it. If the student asks about something not covered by these sources, say it is outside this document — do not invent it."*
+6. **Citation Chips**: Clickable Coursera-style citation chips display document name, chunk ID, page number, and quote snippets directly in the classroom UI.
 
 ---
 
-## 🎬 8. AI Video & Avatar Generation Pipeline
+## 🎭 7. AI Avatar & Video Generation Suite
 
-```
-[Lesson Plan Script + Captions]
-           │
-           ▼
-[Pillow + Matplotlib: Progressive Reveal Scene Slides (PNG)]
-           │
-           ▼
-[FFmpeg Ken Burns Animation: Alternating zoompan Filters (25 FPS)]
-           │
-           ▼
-[Hierarchical TTS Audio (ElevenLabs / Piper .wav)] + [SRT Subtitles Burn-in]
-           │
-           ▼
-[Final Multi-Scene H.264 MP4 Explainer Video]
-```
+Sahayak supports an extensive suite of free and paid video/avatar generation engines:
 
-### Browser-Side Audio-Reactive Presenter & AI Teacher Studio:
-* **Photorealistic AI Teacher Studio**: Interactive studio presentation environment with multi-tier ambient backdrops, neon status indicators, and pulsating audio-responsive glow rings.
-* **Real-Time Voice Equalizer**: Dynamic multi-band frequency spectrum visualizer reacting directly to speech playback via the Web Audio API `AnalyserNode`.
-* **Adaptive Display Toggle**: Seamlessly switch between the **AI Teacher Studio** and generated **Lecture Explainer Video** within both Theater and Split views without interrupting voice or lesson progress.
-* **Canvas Fallback Articulation**: Real-time mouth articulation, eye blinking, and speech amplitude reactivity for lightweight low-bandwidth devices.
+| Provider | Setting | Best For |
+| :--- | :--- | :--- |
+| **Interactive Canvas Avatar** | `AVATAR_PROVIDER=free_avatar` | 100% free, zero API key required, reactive Web Audio mouth articulation & equalizer. |
+| **D-ID API** | `AVATAR_PROVIDER=did` | Photo-to-talking-head video lectures from a single teacher portrait. |
+| **HeyGen API** | `AVATAR_PROVIDER=heygen` | Ultra-realistic digital twins, studio presenters, and streaming WebRTC avatars. |
+| **Synthesia API** | `AVATAR_PROVIDER=synthesia` | Enterprise classroom video lectures with 160+ multilingual instructors. |
+| **Tavus API** | `AVATAR_PROVIDER=tavus` | Low-latency conversational replicas. |
+| **Colossyan API** | `AVATAR_PROVIDER=colossyan` | Multi-actor educational video courseware. |
+| **Replicate (LivePortrait)** | `AVATAR_PROVIDER=replicate` | High-fidelity open-source portrait animation. |
+| **Hugging Face SDXL** | `AVATAR_PROVIDER=huggingface` | Generates custom AI professor portraits from text prompts. |
 
 ---
 
-## 🌐 9. Multilingual Support
+## 🌐 8. Multilingual Support
 
 Sahayak supports **7 languages** with in-flight switching mid-lesson:
 * 🇬🇧 **English** (`en`)
@@ -192,27 +187,18 @@ Students can switch languages via the UI toggle or via natural language commands
 
 ---
 
----
+## 📊 9. Assessment & Diagnostic Gap Map
 
-## 📊 10. Assessment & Misconception Methodology
-
-Sahayak evaluates student comprehension systematically across the teaching lifecycle:
-1. **In-Lesson Checkpoint Evaluation**:
-   * Evaluator classifies responses using Socratic principles: `mastery`, `partial`, `misconception`, `unclear`.
-   * When a misconception is detected, the teacher does not simply say "incorrect"—it identifies the cognitive error, introduces a fresh analogy, alters the visual demonstration, and re-tests.
-2. **Post-Lesson Comprehensive Quiz**:
-   * Generates a 5-question adaptive assessment (MCQs, conceptual questions, code/problem-solving).
-3. **Pedagogical Diagnostic Learning Report**:
-   * Yields a detailed report containing:
-     * Overall Mastery Score percentage
-     * Concepts Understood & Strong Areas
-     * Detected Weak Areas & Root Misconceptions
-     * Targeted Revision Recommendations (actionable practice problems)
-     * Recommended Next Learning Path Node
+1. **In-Lesson Checkpoint Evaluation**: Evaluator classifies responses as `mastery`, `partial`, `misconception`, or `unclear`. Misconceptions trigger targeted remediation loops.
+2. **Document-Grounded Quiz**: Generates adaptive questions tagged with Bloom's taxonomy cognitive levels (`Recall`, `Understand`, `Apply`, `Analyze`) and mapped to specific document `chunk_id`s.
+3. **Diagnostic Gap Map**: Visual breakdown of strong vs. weak concepts with:
+   - Chunk ID and page citations for every question.
+   - Root cause error classification (conceptual vs. arithmetic).
+   - Targeted revision recommendations and practice problems.
 
 ---
 
-## 🚀 11. Quick Start & Setup Instructions (Local in 2 Minutes)
+## 🚀 10. Quick Start & Setup Instructions
 
 ### Prerequisites
 * **Python 3.10+**
@@ -225,8 +211,8 @@ git clone https://github.com/Akshat-coder-101/AI-INNOVATION-.git
 cd AI-INNOVATION-
 ```
 
-### Step 2: Configure Environment
-Copy the `.env.example` templates to `.env` (root or `backend/.env`) and `frontend/.env.local`:
+### Step 2: Configure Environment Variables
+Copy `.env.example` templates to `.env` and `frontend/.env.local`:
 ```bash
 # Root & Backend:
 cp .env.example .env
@@ -236,94 +222,53 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env.local
 ```
 
+Fill in your API keys in `.env` (Gemini, Groq, YouTube, ElevenLabs, Deepgram, etc.).
+
 ### Step 3: Start Backend (FastAPI)
 ```bash
 cd backend
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# Linux/macOS:
-source .venv/bin/activate
-
+python -m venv ../venv
+source ../venv/bin/activate   # On Windows: ..\venv\Scripts\activate
 pip install -r requirements.txt
+
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
-* API Documentation (Swagger): [http://localhost:8000/docs](http://localhost:8000/docs)
-* Health Endpoint: [http://localhost:8000/api/health](http://localhost:8000/api/health)
+* API Documentation (Swagger UI): [http://localhost:8000/docs](http://localhost:8000/docs)
+* Health Check: [http://localhost:8000/health](http://localhost:8000/health)
 
 ### Step 4: Start Frontend (Next.js 15)
-Open a second terminal:
+In a new terminal:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 * Web Application: [http://localhost:3000](http://localhost:3000)
+* Document Upload: [http://localhost:3000/upload](http://localhost:3000/upload)
 
 ---
 
-## ☁️ 12. Deployment Instructions
+## 🧪 11. Automated Test Suite
 
-### Frontend (Vercel)
-1. Push your repository to GitHub.
-2. Import the `frontend/` directory into [Vercel](https://vercel.com).
-3. Set Environment Variables:
-   * `NEXT_PUBLIC_API_BASE_URL`: Your deployed FastAPI backend URL (e.g., `https://sahayak-backend.onrender.com`).
-4. Deploy with one click.
-
-### Backend (Render / Railway / AWS / Docker)
-Deploy using Docker or a standard Python Web Service:
-```dockerfile
-# Dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-RUN apt-get update && apt-get install -y ffmpeg curl && rm -rf /var/lib/apt/lists/*
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY backend/ .
-EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-Set environment variables on your cloud dashboard as documented in `.env.example`.
-
----
-
-## 🧪 13. Automated Test Suite & Verification
-
-Execute the test suites verifying all 14 integration endpoints and type safety:
+Run the comprehensive pytest suite verifying all endpoints, RAG ingestion, lesson planning, and gap map generation:
 ```bash
-# Backend pytest suite (11 integration tests)
 cd backend
-python -m pytest tests/test_all_endpoints.py -v
-
-# Live API and fallback diagnostics suite (14/14 endpoints operational)
-python test_live_apis.py
-
-# Frontend TypeScript type check
-cd ../frontend
-npx tsc --noEmit
+source ../venv/bin/activate
+pytest tests/ -v
 ```
 
 ---
 
-## 🔌 14. APIs and Third-Party Services Disclosed
+## 🔌 12. Third-Party Services Disclosed
 
 | Service / Tool | Purpose | Fallback / Alternative |
 |---|---|---|
 | **Google Gemini / Groq LLaMA 3.3** | LLM pedagogical reasoning, curriculum planning | Multi-provider fallback + deterministic templates |
-| **Piper TTS (Local)** | Offline neural text-to-speech | Zero-cost local ONNX execution |
-| **ElevenLabs API** | High-fidelity multilingual voice | Cascades to local Piper TTS / Web Speech |
+| **YouTube Data API v3** | Curated video grounding & deep-dives | Direct search URL generation |
+| **ElevenLabs API** | Multilingual neural text-to-speech | Local Piper ONNX / Browser Web Speech |
 | **Deepgram Nova-2** | Student microphone voice Q&A | Text keyboard submission |
-| **FFmpeg** | Multi-scene Ken Burns video generation | Audio-reactive HTML5 Canvas avatar |
-| **KaTeX & Recharts** | Mathematical LaTeX formulas & Cartesian plots | Interactive SVGs |
-
----
-
-## ⚠️ 15. Known Limitations & Roadmap
-
-1. **Third-Party API Quotas**: External services (ElevenLabs / HeyGen) may exhaust credits; Sahayak provides built-in zero-cost local Piper TTS and Web Audio Canvas Presenter fallbacks so evaluation never breaks.
-2. **Sandbox Isolation**: The Python sandbox runs within a timeout-capped subprocess; production cloud deployment will utilize microVMs (gVisor / Firecracker).
-3. **Complex Mathematical Proofs**: Extended multi-page proofs are partitioned across structured lesson segments.
+| **D-ID / HeyGen / Synthesia / Tavus** | Photorealistic AI teacher video generation | Interactive Canvas Avatar (Zero-cost) |
+| **KaTeX & Recharts** | Mathematical LaTeX formulas & Cartesian plots | Interactive SVGs & Python Sandbox |
 
 ---
 
@@ -332,3 +277,4 @@ npx tsc --noEmit
 * **Project**: Sahayak AI Teacher 🎓
 * **Hackathon**: AI Innovation Hackathon 2026
 * **Repository**: [Akshat-coder-101/AI-INNOVATION-](https://github.com/Akshat-coder-101/AI-INNOVATION-.git)
+* **License**: MIT

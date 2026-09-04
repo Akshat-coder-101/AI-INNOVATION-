@@ -11,6 +11,15 @@ import CitationChip from "./CitationChip";
 import DemoModeToggle from "./DemoModeToggle";
 import MisconceptionModal from "./MisconceptionModal";
 import AudioReactiveAvatar from "./AudioReactiveAvatar";
+import RelatedVideos from "./RelatedVideos";
+import {
+  CollapsibleDisclosure,
+  ProgressiveStepDisclosure,
+  HintDisclosure,
+  AdaptiveSlider,
+  ProgressStrip,
+} from "./ui";
+import { useToast } from "@/context/ToastContext";
 import { 
   Play, 
   Pause, 
@@ -50,6 +59,7 @@ export default function TeacherPlayer({
   onLessonComplete,
   onSegmentChange,
 }: TeacherPlayerProps) {
+  const { showSuccess, showError } = useToast();
   const [segment, setSegment] = useState<LessonSegmentRender>(initialSegment);
   const [activeTab, setActiveTab] = useState<"interactive" | "reading" | "practice">("interactive");
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
@@ -66,6 +76,11 @@ export default function TeacherPlayer({
   const [isSwitchingLang, setIsSwitchingLang] = useState<boolean>(false);
   const [naturalQuery, setNaturalQuery] = useState<string>("");
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+
+  // Watermelon UI Progressive & Adaptive State
+  const [hintsUsed, setHintsUsed] = useState<number>(0);
+  const [confidenceRating, setConfidenceRating] = useState<number>(3);
+  const [isRequestingSimplification, setIsRequestingSimplification] = useState<boolean>(false);
 
   // Audio Recording State for STT
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -103,14 +118,18 @@ export default function TeacherPlayer({
     if (videoRef.current) videoRef.current.currentTime = newTime;
   };
 
+  const [mediaError, setMediaError] = useState<boolean>(false);
+
   // Sync segment on prop changes
   useEffect(() => {
     setSegment(initialSegment);
     setProgressSec(0);
     setIsPausedForCheckpoint(false);
     setIsPlaying(true);
+    setMediaError(false);
     setFeedbackMessage(null);
     setStudentAnswer("");
+    setHintsUsed(0);
 
     // Calculate segment duration from captions or speech length
     if (initialSegment.captions && initialSegment.captions.length > 0) {
@@ -132,13 +151,13 @@ export default function TeacherPlayer({
         audioRef.current.pause();
       }
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.pause();
+        window.speechSynthesis.cancel();
       }
       return;
     }
 
     // When Playing:
-    if (segment.video_url && videoRef.current) {
+    if (segment.video_url && videoRef.current && !mediaError) {
       if (audioRef.current && !audioRef.current.paused) {
         audioRef.current.pause();
       }
@@ -147,33 +166,41 @@ export default function TeacherPlayer({
       }
       videoRef.current.playbackRate = playbackRate;
       videoRef.current.muted = isMuted;
-      videoRef.current.play().catch((e) => console.log("Video playback caught/autoplay blocked:", e));
-    } else if (segment.audio_url && audioRef.current) {
+      videoRef.current.play().catch((e) => {
+        console.log("[TeacherPlayer] Video autoplay prevented, waiting for user click:", e);
+      });
+    } else if (segment.audio_url && audioRef.current && !mediaError) {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
       audioRef.current.playbackRate = playbackRate;
       audioRef.current.muted = isMuted;
-      audioRef.current.play().catch((e) => console.log("Audio autoplay prevented:", e));
+      audioRef.current.play().catch((e) => {
+        console.log("[TeacherPlayer] Audio autoplay prevented, waiting for user click:", e);
+      });
     } else {
-      // Fallback: Web Speech API (with stateful resume)
+      // Fallback: Web Speech API (robust queue management)
       if (typeof window !== "undefined" && "speechSynthesis" in window && !isMuted && activeTab === "interactive") {
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
-        } else if (!window.speechSynthesis.speaking) {
+        try {
           window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance(segment.spoken_script);
           utterance.rate = playbackRate;
+          utterance.volume = isMuted ? 0 : 1;
           utterance.lang = activeLanguage === "hi" ? "hi-IN" : "en-US";
           utterance.onend = () => {
             setIsPlaying(false);
             setIsPausedForCheckpoint(true);
           };
+          utterance.onerror = (e) => {
+            console.warn("[TeacherPlayer] SpeechSynthesis error:", e);
+          };
           window.speechSynthesis.speak(utterance);
+        } catch (e) {
+          console.warn("[TeacherPlayer] SpeechSynthesis trigger failed:", e);
         }
       }
     }
-  }, [isPlaying, isMuted, playbackRate, segment.video_url, segment.audio_url, segment.spoken_script, activeLanguage, activeTab]);
+  }, [isPlaying, isMuted, playbackRate, segment.video_url, segment.audio_url, segment.spoken_script, activeLanguage, activeTab, mediaError]);
 
   // Sync mute state to media elements
   useEffect(() => {
@@ -190,10 +217,12 @@ export default function TeacherPlayer({
     };
   }, []);
 
-  // Web Speech fallback playback timer (only if NO audio_url)
+  // Universal progress timer & watchdog (runs for Web Speech or when media fails)
   useEffect(() => {
     let interval: any = null;
-    if (!segment.audio_url && isPlaying && !isPausedForCheckpoint) {
+    const isUsingTimerFallback = (!segment.audio_url && !segment.video_url) || mediaError;
+
+    if (isUsingTimerFallback && isPlaying && !isPausedForCheckpoint) {
       interval = setInterval(() => {
         setProgressSec((prev) => {
           const next = prev + 0.5;
@@ -207,7 +236,7 @@ export default function TeacherPlayer({
       }, 500);
     }
     return () => clearInterval(interval);
-  }, [segment.audio_url, isPlaying, isPausedForCheckpoint, durationSec]);
+  }, [segment.audio_url, segment.video_url, isPlaying, isPausedForCheckpoint, durationSec, mediaError]);
 
   // Update live caption dynamically from captions array
   useEffect(() => {
@@ -256,6 +285,8 @@ export default function TeacherPlayer({
         student_answer: studentAnswer,
         is_demo_mode: isDemoMode,
         force_misconception: isDemoMode, // Deterministic reteach demo
+        hints_used: hintsUsed,
+        confidence_rating: confidenceRating,
       });
 
       if (res.action === "reteach") {
@@ -265,6 +296,7 @@ export default function TeacherPlayer({
         setTimeout(async () => {
           setFeedbackMessage(null);
           setStudentAnswer("");
+          setHintsUsed(0);
           setIsPausedForCheckpoint(false);
           
           if (segment.segment_id >= totalSegments) {
@@ -317,6 +349,8 @@ export default function TeacherPlayer({
         formData.append("segment_id", segment.segment_id.toString());
         formData.append("is_demo_mode", isDemoMode.toString());
         formData.append("force_misconception", isDemoMode.toString());
+        formData.append("hints_used", hintsUsed.toString());
+        formData.append("confidence_rating", confidenceRating.toString());
 
         setIsSubmittingAnswer(true);
         try {
@@ -339,6 +373,7 @@ export default function TeacherPlayer({
             setTimeout(async () => {
               setFeedbackMessage(null);
               setStudentAnswer("");
+              setHintsUsed(0);
               setIsPausedForCheckpoint(false);
               if (segment.segment_id >= totalSegments) {
                 onLessonComplete();
@@ -428,6 +463,35 @@ export default function TeacherPlayer({
     }
   };
 
+  // Adaptive Simplification trigger from Watermelon UI Adaptive Slider
+  const handleSliderSimplification = async () => {
+    setIsRequestingSimplification(true);
+    try {
+      const res = await api.requestSimplification(
+        segment.session_id,
+        segment.segment_id,
+        "I rated comprehension confidence as low. Please simplify this concept with an intuitive real-world analogy and step-by-step breakdown."
+      );
+      if (res.reteach_segment) {
+        setSegment(res.reteach_segment);
+        setMisconceptionData(null);
+        setProgressSec(0);
+        setStudentAnswer("");
+        setHintsUsed(0);
+        setIsPausedForCheckpoint(false);
+        setIsPlaying(true);
+        setFeedbackMessage("✨ Adaptive Reteach Activated: Simpler model loaded based on your confidence rating.");
+        showSuccess("Adaptive simplification applied: Intuitive explanation loaded.");
+        setTimeout(() => setFeedbackMessage(null), 4000);
+      }
+    } catch (err: any) {
+      console.error("Adaptive simplification error:", err);
+      showError(err.message || "Failed to trigger adaptive simplification");
+    } finally {
+      setIsRequestingSimplification(false);
+    }
+  };
+
   // Language switch
   const handleLanguageChange = async (targetLang: string) => {
     if (targetLang === activeLanguage) return;
@@ -442,8 +506,19 @@ export default function TeacherPlayer({
       setSegment(updatedSeg);
       setProgressSec(0);
       setIsPlaying(true);
-    } catch (err) {
+      const langNames: Record<string, string> = {
+        en: "English",
+        hi: "Hindi (हिन्दी)",
+        hinglish: "Hinglish",
+        ta: "Tamil (தமிழ்)",
+        te: "Telugu (తెలుగు)",
+        bn: "Bengali (বাংলা)",
+        es: "Spanish (Español)"
+      };
+      showSuccess(`Language switched to ${langNames[targetLang] || targetLang.toUpperCase()}`);
+    } catch (err: any) {
       console.error(err);
+      showError(err.message || "Failed to switch audio/video language");
     } finally {
       setIsSwitchingLang(false);
     }
@@ -462,18 +537,71 @@ export default function TeacherPlayer({
     setNaturalQuery("");
   };
 
+  // Watermelon UI Component 1: Progressive steps dynamically calculated from segment payload
+  const explanationSteps = [
+    {
+      title: "1. Foundational Intuition",
+      description: segment.on_screen_text || segment.concept,
+      details: segment.on_screen_text || `Core principle governing ${segment.concept}.`,
+      keyRule: segment.concept,
+    },
+    {
+      title: "2. Mechanistic Breakdown",
+      description: (segment.spoken_script || "").slice(0, 120) + "...",
+      details: segment.spoken_script,
+    },
+    {
+      title: "3. Grounded Analogy",
+      description:
+        segment.analogies_used && segment.analogies_used.length > 0
+          ? segment.analogies_used[0]
+          : "Mapped directly to observable physical behavior.",
+      details:
+        segment.analogies_used && segment.analogies_used.length > 0
+          ? segment.analogies_used.join("\n\n")
+          : "Grounded cognitive bridge for intuitive memory recall.",
+    },
+    {
+      title: "4. Live Demonstrator Spec",
+      description: `Interactive Canvas: ${segment.visual_spec?.title || segment.visual_spec?.type || "Blackboard Simulation"}`,
+      details: "Reactive parameter coordinates synced with mathematical model.",
+    },
+  ];
+
+  // Paced step reveal (unlocked as segment video/audio advances)
+  const currentPacedStepIndex = Math.min(
+    3,
+    Math.floor((progressSec / Math.max(durationSec, 1)) * 4)
+  );
+
   return (
     <div className="space-y-4">
       {/* Hidden real HTML5 audio element when audio_url is present without video */}
-      {segment.audio_url && !segment.video_url && (
+      {segment.audio_url && !segment.video_url && !mediaError && (
         <audio
           ref={audioRef}
+          crossOrigin="anonymous"
+          preload="auto"
           src={segment.audio_url.startsWith("http") ? segment.audio_url : `${apiBaseUrl}${segment.audio_url}`}
           onTimeUpdate={handleAudioTimeUpdate}
           onEnded={handleAudioEnded}
+          onError={() => {
+            console.warn("[TeacherPlayer] Audio playback failed, switching to local audio fallback.");
+            setMediaError(true);
+          }}
           autoPlay={isPlaying}
         />
       )}
+
+      {/* Watermelon UI Component 3: Live Progress Strip (Strictly Real Session Data) */}
+      <ProgressStrip
+        currentSegmentId={segment.segment_id}
+        totalSegments={totalSegments}
+        hintsUsed={hintsUsed}
+        confidenceRating={confidenceRating}
+        isReteach={segment.is_reteach}
+        topic={segment.concept}
+      />
 
       {/* Top Tab Switcher & Language Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 rounded-lg bg-white border border-border shadow-2xs">
@@ -597,9 +725,6 @@ export default function TeacherPlayer({
                         if (vid.duration && !isNaN(vid.duration) && vid.duration > 1) {
                           setDurationSec(Math.ceil(vid.duration));
                         }
-                        if (vid.currentTime === 0) {
-                          vid.currentTime = 0.05;
-                        }
                       }}
                       onTimeUpdate={() => {
                         if (videoRef.current) setProgressSec(videoRef.current.currentTime);
@@ -607,6 +732,10 @@ export default function TeacherPlayer({
                       onEnded={() => {
                         setIsPlaying(false);
                         setIsPausedForCheckpoint(true);
+                      }}
+                      onError={() => {
+                        console.warn("[TeacherPlayer] Video playback failed, switching to avatar studio.");
+                        setMediaError(true);
                       }}
                     />
 
@@ -629,11 +758,11 @@ export default function TeacherPlayer({
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-neutral-900 via-neutral-950 to-black p-4">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent pointer-events-none" />
 
-                    <div className="relative z-10">
+                    <div className="relative z-10 flex flex-col items-center">
                       <AudioReactiveAvatar
                         audioRef={audioRef}
                         isPlaying={isPlaying}
-                        isFallbackSpeaking={!segment.audio_url && isPlaying}
+                        isFallbackSpeaking={(!segment.audio_url || mediaError) && isPlaying}
                         size={140}
                         name="Prof. Sahayak AI"
                         subtitle={
@@ -652,6 +781,18 @@ export default function TeacherPlayer({
                             : "Adaptive Lecture Studio"
                         }
                       />
+
+                      {/* Prominent Center Play Button when paused */}
+                      {!isPlaying && !isPausedForCheckpoint && (
+                        <button
+                          type="button"
+                          onClick={() => setIsPlaying(true)}
+                          className="mt-4 px-5 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white font-bold text-xs flex items-center gap-2 shadow-2xl transition-all transform hover:scale-105 active:scale-95 animate-bounce"
+                        >
+                          <Play className="w-4 h-4 fill-current" />
+                          <span>Click to Play Lecture</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -864,6 +1005,22 @@ export default function TeacherPlayer({
                   <div className="min-h-[380px]">
                     <VisualRenderer visualSpec={segment.visual_spec} />
                   </div>
+
+                  {/* Watermelon UI Component 1: Progressive Sequential Step Breakdown */}
+                  <div className="space-y-2 pt-2">
+                    <div className="flex items-center justify-between pb-1">
+                      <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+                        Sequential Concept Breakdown
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary font-mono font-bold">
+                        Step {currentPacedStepIndex + 1}/4 Unlocked
+                      </span>
+                    </div>
+                    <ProgressiveStepDisclosure
+                      steps={explanationSteps}
+                      currentStepIndex={currentPacedStepIndex}
+                    />
+                  </div>
                 </div>
 
                 <div className="lg:col-span-5 flex flex-col space-y-3">
@@ -920,6 +1077,20 @@ export default function TeacherPlayer({
                       />
                     )}
 
+                    {/* Watermelon UI Component 1: Functional Hint Progressive Disclosure */}
+                    <HintDisclosure
+                      hints={
+                        segment.checkpoint_question.hints && segment.checkpoint_question.hints.length > 0
+                          ? segment.checkpoint_question.hints
+                          : [
+                              `Consider how ${segment.concept} behaves in this interactive physical/computational model.`,
+                              "Inspect the formulas and diagrams rendered on the blackboard demonstrator.",
+                            ]
+                      }
+                      hintsUsed={hintsUsed}
+                      onHintUsed={() => setHintsUsed((prev) => prev + 1)}
+                    />
+
                     {feedbackMessage && (
                       <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-[#0F7B3F] font-bold flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 flex-shrink-0" />
@@ -964,6 +1135,14 @@ export default function TeacherPlayer({
                       </div>
                     </form>
                   </div>
+
+                  {/* Watermelon UI Component 2: Adaptive Confidence Slider (Drives Real Reteach Loop) */}
+                  <AdaptiveSlider
+                    value={confidenceRating}
+                    onChange={setConfidenceRating}
+                    onRequestSimplification={handleSliderSimplification}
+                    isReteaching={isRequestingSimplification}
+                  />
                 </div>
               </div>
             </div>
@@ -988,9 +1167,6 @@ export default function TeacherPlayer({
                         if (vid.duration && !isNaN(vid.duration) && vid.duration > 1) {
                           setDurationSec(Math.ceil(vid.duration));
                         }
-                        if (vid.currentTime === 0) {
-                          vid.currentTime = 0.05;
-                        }
                       }}
                       onTimeUpdate={() => {
                         if (videoRef.current) setProgressSec(videoRef.current.currentTime);
@@ -998,6 +1174,10 @@ export default function TeacherPlayer({
                       onEnded={() => {
                         setIsPlaying(false);
                         setIsPausedForCheckpoint(true);
+                      }}
+                      onError={() => {
+                        console.warn("[TeacherPlayer] Video playback failed in split mode, switching to avatar studio.");
+                        setMediaError(true);
                       }}
                     />
                   ) : (
@@ -1092,6 +1272,22 @@ export default function TeacherPlayer({
                   </p>
                   <CitationChip citations={segment.citations} />
                 </div>
+
+                {/* Watermelon UI Component 1: Sequential Concept Breakdown (Split Mode) */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between pb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+                      Sequential Concept Breakdown
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary font-mono font-bold">
+                      Step {currentPacedStepIndex + 1}/4
+                    </span>
+                  </div>
+                  <ProgressiveStepDisclosure
+                    steps={explanationSteps}
+                    currentStepIndex={currentPacedStepIndex}
+                  />
+                </div>
               </div>
 
               {/* Right Column: Visual Stage + Checkpoint */}
@@ -1129,6 +1325,20 @@ export default function TeacherPlayer({
                     </div>
                   )}
 
+                  {/* Watermelon UI Component 1: Functional Hint Progressive Disclosure */}
+                  <HintDisclosure
+                    hints={
+                      segment.checkpoint_question.hints && segment.checkpoint_question.hints.length > 0
+                        ? segment.checkpoint_question.hints
+                        : [
+                            `Consider how ${segment.concept} behaves in this interactive physical/computational model.`,
+                            "Inspect the formulas and diagrams rendered on the blackboard demonstrator.",
+                          ]
+                    }
+                    hintsUsed={hintsUsed}
+                    onHintUsed={() => setHintsUsed((prev) => prev + 1)}
+                  />
+
                   {feedbackMessage && (
                     <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-xs text-[#0F7B3F] font-bold">
                       {feedbackMessage}
@@ -1154,6 +1364,23 @@ export default function TeacherPlayer({
                     </button>
                   </form>
                 </div>
+
+                {/* Watermelon UI Component 2: Adaptive Confidence Slider (Split Mode) */}
+                <AdaptiveSlider
+                  value={confidenceRating}
+                  onChange={setConfidenceRating}
+                  onRequestSimplification={handleSliderSimplification}
+                  isReteaching={isRequestingSimplification}
+                />
+
+                {/* AI-Grounded YouTube Educational Videos */}
+                <RelatedVideos
+                  topic={segment.concept}
+                  language={activeLanguage}
+                  segmentId={segment.segment_id}
+                  sessionId={segment.session_id}
+                  context={segment.on_screen_text || segment.spoken_script}
+                />
               </div>
             </div>
           )}
@@ -1171,24 +1398,49 @@ export default function TeacherPlayer({
           </div>
 
           <div className="space-y-4 text-sm text-ink-secondary leading-relaxed">
-            <div className="p-4 rounded-md bg-canvas-elevated border border-border">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-ink-muted mb-2 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-accent" />
-                <span>On-Screen Pedagogical Summary</span>
-              </h4>
+            <CollapsibleDisclosure
+              title="On-Screen Pedagogical Summary"
+              badge="Overview"
+              defaultOpen={true}
+              variant="card"
+              icon={<Sparkles className="w-4 h-4 text-accent" />}
+            >
               <p className="text-xs leading-relaxed text-ink-primary font-medium whitespace-pre-wrap">
                 {segment.on_screen_text || segment.spoken_script}
               </p>
-            </div>
+            </CollapsibleDisclosure>
 
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-                Key Conceptual Rules
-              </h4>
-              <p className="text-xs leading-relaxed text-ink-secondary">
+            <CollapsibleDisclosure
+              title="Sequential Conceptual Milestones"
+              badge="Step-by-Step"
+              defaultOpen={true}
+              variant="bordered"
+            >
+              <ProgressiveStepDisclosure
+                steps={explanationSteps}
+                currentStepIndex={explanationSteps.length - 1}
+              />
+            </CollapsibleDisclosure>
+
+            <CollapsibleDisclosure
+              title="Full Spoken Transcript & Rules"
+              badge="Complete Script"
+              defaultOpen={false}
+              variant="bordered"
+            >
+              <p className="text-xs leading-relaxed text-ink-secondary whitespace-pre-wrap">
                 {segment.spoken_script}
               </p>
-            </div>
+            </CollapsibleDisclosure>
+
+            {/* AI-Grounded YouTube Educational Videos */}
+            <RelatedVideos
+              topic={segment.concept}
+              language={activeLanguage}
+              segmentId={segment.segment_id}
+              sessionId={segment.session_id}
+              context={segment.on_screen_text || segment.spoken_script}
+            />
           </div>
         </div>
       )}

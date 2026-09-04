@@ -21,6 +21,7 @@ import {
   Compass, 
   UploadCloud 
 } from "lucide-react";
+import { StatCard } from "@/components/ui";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -46,37 +47,6 @@ export default function DashboardPage() {
 
   const hoursDisplay = (analytics.totalStudyMinutes / 60).toFixed(1);
   const hasSessions = analytics.recentSessions.length > 0;
-
-  const stats = [
-    { 
-      title: "Total Study Time", 
-      value: hasSessions ? `${hoursDisplay} Hours` : "0.0 Hours", 
-      sub: hasSessions ? `${analytics.totalStudyMinutes} min active` : "No sessions completed yet",
-      icon: Clock, 
-      color: "text-primary" 
-    },
-    { 
-      title: "Average Mastery Score", 
-      value: hasSessions ? `${analytics.averageScore}%` : "—", 
-      sub: hasSessions ? "Based on completed quizzes" : "Take a quiz to calibrate score",
-      icon: Award, 
-      color: "text-[#0F7B3F]" 
-    },
-    { 
-      title: "Curriculum Nodes Mastered", 
-      value: hasSessions ? `${analytics.nodesMastered} Nodes` : "0 Nodes", 
-      sub: hasSessions ? "Bloom's taxonomy milestones" : "0 / 6 initial tier",
-      icon: Target, 
-      color: "text-primary" 
-    },
-    { 
-      title: "Misconceptions Resolved", 
-      value: hasSessions ? `${analytics.misconceptionsResolved} Adapted` : "0 Adapted", 
-      sub: hasSessions ? "Targeted analogies delivered" : "0 conceptual gaps flagged",
-      icon: BrainCircuit, 
-      color: "text-accent" 
-    },
-  ];
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-12">
@@ -108,21 +78,50 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Metric Cards Grid */}
+      {/* Watermelon UI Component 3: Metric Stat Cards Grid (Spring counters bound strictly to real data) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((st, i) => {
-          const Icon = st.icon;
-          return (
-            <div key={i} className="bg-white p-5 rounded-lg border border-border space-y-2 shadow-2xs hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-ink-muted font-bold">{st.title}</span>
-                <Icon className={`w-4 h-4 ${st.color}`} />
-              </div>
-              <span className="text-2xl font-black text-black block">{st.value}</span>
-              <p className="text-[11px] text-ink-muted">{st.sub}</p>
-            </div>
-          );
-        })}
+        <StatCard
+          title="Total Study Time"
+          value={hasSessions ? `${hoursDisplay} Hours` : "0.0 Hours"}
+          numericValue={hasSessions ? Number(hoursDisplay) : 0}
+          suffix=" Hours"
+          subtext={hasSessions ? `${analytics.totalStudyMinutes} min active study` : "No sessions completed yet"}
+          icon={Clock}
+          color="text-primary"
+          badge={hasSessions ? `${analytics.totalStudyMinutes}m` : undefined}
+          isEmpty={!hasSessions}
+        />
+        <StatCard
+          title="Average Mastery Score"
+          value={hasSessions ? `${analytics.averageScore}%` : "—"}
+          numericValue={hasSessions ? analytics.averageScore : 0}
+          suffix="%"
+          subtext={hasSessions ? "Calibrated from real assessments" : "Take a quiz to calibrate score"}
+          icon={Award}
+          color="text-[#0F7B3F]"
+          badge={hasSessions ? (analytics.averageScore >= 80 ? "Mastery" : "Progressing") : undefined}
+          isEmpty={!hasSessions}
+        />
+        <StatCard
+          title="Curriculum Nodes Mastered"
+          value={hasSessions ? `${analytics.nodesMastered} Nodes` : "0 Nodes"}
+          numericValue={hasSessions ? analytics.nodesMastered : 0}
+          suffix=" Nodes"
+          subtext={hasSessions ? "Bloom's taxonomy milestones" : "0 / 6 initial tier"}
+          icon={Target}
+          color="text-primary"
+          isEmpty={!hasSessions}
+        />
+        <StatCard
+          title="Misconceptions Resolved"
+          value={hasSessions ? `${analytics.misconceptionsResolved} Adapted` : "0 Adapted"}
+          numericValue={hasSessions ? analytics.misconceptionsResolved : 0}
+          suffix=" Adapted"
+          subtext={hasSessions ? "Targeted analogies delivered" : "0 conceptual gaps flagged"}
+          icon={BrainCircuit}
+          color="text-accent"
+          isEmpty={!hasSessions}
+        />
       </div>
 
       {/* Analytics Chart & Domain Breakdown */}

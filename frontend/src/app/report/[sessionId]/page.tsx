@@ -55,8 +55,28 @@ export default function ReportPage() {
 
   if (!report) {
     return (
-      <div className="py-20 text-center text-ink-muted">
-        <p>No report found for this session.</p>
+      <div className="py-20 max-w-md mx-auto text-center space-y-4 bg-white rounded-xl border border-border p-8 shadow-2xs">
+        <div className="w-12 h-12 rounded-full bg-canvas-elevated flex items-center justify-center mx-auto text-ink-muted">
+          <Award className="w-6 h-6" />
+        </div>
+        <h3 className="font-bold text-sm text-black">No Report Available Yet</h3>
+        <p className="text-xs text-ink-secondary">
+          No learning diagnostics have been generated for this session. Complete a topic lesson and assessment to view your personalized analytics.
+        </p>
+        <div className="pt-2 flex justify-center gap-3">
+          <Link
+            href="/topic"
+            className="px-4 py-2 rounded-lg bg-black text-white font-bold text-xs shadow-2xs"
+          >
+            Start a Lesson
+          </Link>
+          <Link
+            href="/dashboard"
+            className="px-4 py-2 rounded-lg border border-border text-ink-primary font-bold text-xs hover:bg-canvas-elevated"
+          >
+            Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
@@ -137,6 +157,67 @@ export default function ReportPage() {
           )}
         </div>
       </div>
+
+      {/* Document Gap Map (Missed Concepts & Linked Citations) */}
+      {report.gap_map && report.gap_map.length > 0 && (
+        <div className="bg-white rounded-lg p-6 border border-border space-y-4 shadow-2xs">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+              <h3 className="font-bold text-sm text-black">Diagnostic Gap Map & Verified Citations</h3>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 text-[#B75F00] font-bold border border-amber-200">
+              {report.gap_map.length} Focus Areas
+            </span>
+          </div>
+
+          <p className="text-xs text-ink-muted">
+            The diagnostic evaluator mapped your assessment responses directly to the source document segments and verified excerpts for targeted revision:
+          </p>
+
+          <div className="space-y-3">
+            {report.gap_map.map((gap, i) => (
+              <div key={i} className="p-4 rounded-lg bg-canvas-elevated border border-border space-y-2.5 hover:border-primary/50 transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-primary px-2 py-0.5 rounded bg-[#E9F1FC]">
+                      Gap #{i + 1}
+                    </span>
+                    <h4 className="font-bold text-xs text-black">{gap.concept}</h4>
+                  </div>
+                  {gap.segment_id && (
+                    <Link
+                      href={`/lesson/${sessionId}`}
+                      className="inline-flex items-center gap-1 text-[11px] text-primary font-bold hover:underline"
+                    >
+                      <span>Review Segment {gap.segment_id}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  )}
+                </div>
+
+                {gap.citation && (
+                  <div className="p-2.5 rounded bg-white border border-border/80 text-xs text-ink-secondary space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-ink-muted font-mono">
+                      <span>Source: {gap.citation.chapter || "Document Reference"}</span>
+                      <span>Page {gap.citation.page || 1}</span>
+                    </div>
+                    {(gap.citation.quote || gap.citation.snippet) && (
+                      <blockquote className="text-xs italic text-ink-primary border-l-2 border-primary pl-2 my-1">
+                        "{gap.citation.quote || gap.citation.snippet}"
+                      </blockquote>
+                    )}
+                  </div>
+                )}
+
+                <p className="text-xs text-ink-secondary font-medium">
+                  👉 <strong className="text-black">Action:</strong> {gap.recommendation}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Actionable Revision Checklist */}
       <div className="bg-white rounded-lg p-6 border border-border space-y-4 shadow-2xs">

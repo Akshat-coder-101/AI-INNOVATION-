@@ -85,17 +85,18 @@ export default function LearningPathDAG({ initialPath }: LearningPathDAGProps) {
                           e.stopPropagation();
                           handleToggleNode(node.id);
                         }}
-                        className={`w-8 h-8 rounded flex items-center justify-center transition-all ${
+                        className={`w-11 h-11 rounded flex items-center justify-center transition-all shrink-0 ${
                           node.completed
                             ? "bg-[#0F7B3F] text-white shadow-2xs"
                             : "bg-canvas-elevated text-ink-muted hover:bg-white border border-border"
                         }`}
                         title={node.completed ? "Mark as Incomplete" : "Mark as Completed"}
+                        aria-label={node.completed ? `Mark ${node.title} as incomplete` : `Mark ${node.title} as completed`}
                       >
                         {node.completed ? (
-                          <Check className="w-4 h-4 stroke-[3]" />
+                          <Check className="w-5 h-5 stroke-[3]" />
                         ) : (
-                          <Circle className="w-4 h-4" />
+                          <Circle className="w-5 h-5" />
                         )}
                       </button>
 

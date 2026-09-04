@@ -4,19 +4,24 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, Quiz, QuizGradeResponse } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { recordSessionCompletion } from "@/lib/analytics";
+import Link from "next/link";
 import { 
   GraduationCap, 
   Check, 
   XCircle, 
   ArrowRight, 
-  Sparkles
+  Sparkles,
+  BookOpen,
+  LayoutDashboard
 } from "lucide-react";
 
 export default function AssessmentPage() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
+  const { showSuccess, showError } = useToast();
   const sessionId = params.sessionId as string;
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -31,14 +36,15 @@ export default function AssessmentPage() {
         setIsLoading(true);
         const data = await api.getQuiz(sessionId);
         setQuiz(data);
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
+        showError("Could not load assessment questions for this session.");
       } finally {
         setIsLoading(false);
       }
     }
     if (sessionId) fetchQuiz();
-  }, [sessionId]);
+  }, [sessionId, showError]);
 
   const handleSelectOption = (questionId: string, option: string) => {
     if (gradeResult) return; // locked after grading
@@ -56,6 +62,7 @@ export default function AssessmentPage() {
         answers,
       });
       setGradeResult(res);
+      showSuccess(`Quiz graded! Score: ${Math.round(res.score_percentage)}%`);
 
       // Record this real completed session in learner analytics
       recordSessionCompletion(user?.id || "default-user", {
@@ -66,8 +73,9 @@ export default function AssessmentPage() {
         status: "Completed",
         date: "Today",
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showError("Failed to submit and grade quiz. Please retry.");
     } finally {
       setIsSubmitting(false);
     }
@@ -93,8 +101,28 @@ export default function AssessmentPage() {
 
   if (!quiz) {
     return (
-      <div className="py-20 text-center text-ink-muted">
-        <p>No active assessment found for this session.</p>
+      <div className="py-20 max-w-md mx-auto text-center space-y-4 bg-white rounded-xl border border-border p-8 shadow-2xs">
+        <div className="w-12 h-12 rounded-full bg-canvas-elevated flex items-center justify-center mx-auto text-ink-muted">
+          <BookOpen className="w-6 h-6" />
+        </div>
+        <h3 className="font-bold text-sm text-black">No Active Assessment Found</h3>
+        <p className="text-xs text-ink-secondary">
+          No diagnostic quiz was generated for this session ID. Start a lesson to unlock targeted mastery assessments.
+        </p>
+        <div className="pt-2 flex justify-center gap-3">
+          <Link
+            href="/topic"
+            className="px-4 py-2 rounded-lg bg-black text-white font-bold text-xs shadow-2xs"
+          >
+            Explore Topics
+          </Link>
+          <Link
+            href="/dashboard"
+            className="px-4 py-2 rounded-lg border border-border text-ink-primary font-bold text-xs hover:bg-canvas-elevated"
+          >
+            Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
