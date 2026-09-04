@@ -486,9 +486,13 @@ JSON output schema:
         recent_session = db.query(DBLessonSession).filter(DBLessonSession.user_id == user_id).order_by(DBLessonSession.created_at.desc()).first()
         recent_score = 100.0
         if recent_session:
-            recent_attempt = db.query(DBQuizAttempt).filter(DBQuizAttempt.session_id == recent_session.id).order_by(DBQuizAttempt.created_at.desc()).first()
-            if recent_attempt and recent_attempt.score_percentage is not None:
-                recent_score = float(recent_attempt.score_percentage)
+            recent_attempt = db.query(DBQuizAttempt).filter(DBQuizAttempt.session_id == getattr(recent_session, "id", "")).order_by(DBQuizAttempt.created_at.desc()).first()
+            raw_score = getattr(recent_attempt, "score_percentage", None) if recent_attempt else None
+            if raw_score is not None:
+                try:
+                    recent_score = float(raw_score)
+                except (ValueError, TypeError):
+                    recent_score = 100.0
 
         if not db_path or not db_path.dag_json:
             return await cls.generate_or_get_learning_path(topic_id, user_id, db)

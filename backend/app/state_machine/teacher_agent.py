@@ -162,7 +162,8 @@ Output a JSON object with this EXACT structure:
                         options = [str(opt) for opt in raw_opts]
                     correct_ans = str(cp.get("correct_answer") or options[0])
 
-                    hints_list = [str(h) for h in cp["hints"]] if isinstance(cp.get("hints"), list) else [f"Focus on the core definition of {s.get('concept')}"]
+                    raw_hints = cp.get("hints")
+                    hints_list = [str(h) for h in raw_hints] if isinstance(raw_hints, list) else [f"Focus on the core definition of {s.get('concept')}"]
 
                     checkpoint_q = CheckpointQuestion(
                         type=str(cp.get("type", "mcq")),
@@ -362,7 +363,8 @@ Output a JSON object with this EXACT structure:
         level: str = str(seg.get("depth", "beginner"))
         
         # Build citations if material attached
-        material_id: Optional[str] = str(plan_data["material_id"]) if plan_data.get("material_id") else None
+        raw_mat_id = plan_data.get("material_id")
+        material_id: Optional[str] = str(raw_mat_id) if raw_mat_id else None
         citations: List[Citation] = []
         rag_context: str = ""
         if material_id:
@@ -490,7 +492,7 @@ Output JSON with:
             captions=captions,
             citations=citations,
             checkpoint_question=checkpoint_q,
-            analogies_used=[str(a) for a in (db_sess.analogies_used or [])],
+            analogies_used=[str(a) for a in (getattr(db_sess, "analogies_used", None) or [])],
             language=active_lang,
             is_reteach=False
         )
