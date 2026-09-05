@@ -1,33 +1,106 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, ParsedStudentInstruction } from "@/lib/api";
 import { 
   Sparkles, 
   Clock, 
   Languages, 
   GraduationCap, 
   Sliders, 
-  ArrowRight
+  ArrowRight,
+  MessageSquare,
+  Wand2,
+  Loader2,
+  BookOpen
 } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 
 function SetupForm() {
   const router = useRouter();
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError, showInfo } = useToast();
   const searchParams = useSearchParams();
   const initialTopic = searchParams.get("topic") || "Foundations of Quantum Mechanics";
   const materialId = searchParams.get("materialId") || undefined;
   const filename = searchParams.get("filename") || undefined;
+  const initialInstruction = searchParams.get("instruction") || "";
 
+  const [promptText, setPromptText] = useState(initialInstruction || "");
+  const [isParsing, setIsParsing] = useState(false);
   const [topic, setTopic] = useState(initialTopic);
+  const [targetChapter, setTargetChapter] = useState("");
   const [level, setLevel] = useState("beginner");
   const [goal, setGoal] = useState("understand_concept");
   const [style, setStyle] = useState("visual");
+  const [teacherPersonality, setTeacherPersonality] = useState("socratic");
   const [language, setLanguage] = useState("en");
   const [timeBudget, setTimeBudget] = useState(20);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Auto-parse if instruction is provided in query params
+  useEffect(() => {
+    if (initialInstruction) {
+      applyParsedInstruction(initialInstruction);
+    }
+  }, [initialInstruction]);
+
+  const applyParsedInstruction = async (text: string) => {
+    if (!text.trim()) return;
+    setIsParsing(true);
+    try {
+      let parsed: ParsedStudentInstruction;
+      if (materialId) {
+        parsed = await api.parseInstructionForDocument(materialId, text);
+      } else {
+        // Fallback local regex parsing
+        const lower = text.toLowerCase();
+        const chMatch = lower.match(/(?:chapter|ch\.?|unit|section)\s*([0-9a-zA-Z_.-]+)/i);
+        const timeMatch = lower.match(/(\d+)\s*(?:minutes|mins|min|m\b)/i);
+        let lvl = "intermediate";
+        if (lower.includes("beginner") || lower.includes("novice") || lower.includes("scratch")) lvl = "beginner";
+        else if (lower.includes("advanced") || lower.includes("expert") || lower.includes("rigorous")) lvl = "advanced";
+
+        let lang = "en";
+        if (lower.includes("hindi") || lower.includes("हिंदी")) lang = "hi";
+        else if (lower.includes("hinglish")) lang = "hinglish";
+        else if (lower.includes("tamil")) lang = "ta";
+        else if (lower.includes("telugu")) lang = "te";
+        else if (lower.includes("bengali")) lang = "bn";
+        else if (lower.includes("spanish")) lang = "es";
+
+        let sty = "visual";
+        if (lower.includes("example") || lower.includes("analog")) sty = "analogies";
+        else if (lower.includes("code") || lower.includes("python")) sty = "code";
+        else if (lower.includes("socratic") || lower.includes("question")) sty = "socratic";
+
+        parsed = {
+          raw_instruction: text,
+          target_chapter: chMatch ? chMatch[1] : undefined,
+          time_budget_minutes: timeMatch ? parseInt(timeMatch[1], 10) : 20,
+          learner_level: lvl,
+          language: lang,
+          pedagogical_style: sty,
+          include_checkpoints: true,
+          include_final_assessment: true,
+          simple_examples_requested: true,
+          key_focus_topics: []
+        };
+      }
+
+      if (parsed.learner_level) setLevel(parsed.learner_level);
+      if (parsed.time_budget_minutes) setTimeBudget(parsed.time_budget_minutes);
+      if (parsed.language) setLanguage(parsed.language);
+      if (parsed.pedagogical_style) setStyle(parsed.pedagogical_style);
+      if (parsed.target_chapter) setTargetChapter(parsed.target_chapter);
+
+      showInfo("Auto-configured learning profile from your instruction!");
+    } catch (err) {
+      console.warn("Error parsing prompt:", err);
+    } finally {
+      setIsParsing(false);
+    }
+  };
 
   const handleGenerateLesson = async () => {
     setIsGenerating(true);
@@ -35,12 +108,15 @@ function SetupForm() {
       const plan = await api.createLessonPlan({
         topic: materialId ? undefined : topic,
         material_id: materialId,
+        instruction: promptText.trim() || undefined,
+        target_chapter: targetChapter.trim() || undefined,
         learner_profile: {
           level,
           goal,
           preferred_style: style,
           language,
           time_budget_minutes: timeBudget,
+          teacher_personality: teacherPersonality,
         },
         time_budget_minutes: timeBudget,
         language,
@@ -70,7 +146,66 @@ function SetupForm() {
         </p>
       </div>
 
+      {/* Natural Language Prompt Assistant Card */}
+      <div className="bg-[#F8FAFD] rounded-lg p-5 border border-primary/20 space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-2">
+            <Wand2 className="w-4 h-4 text-primary" />
+            <span>AI Prompt Assistant:</span>
+          </label>
+          <span className="text-[11px] text-ink-muted font-medium">Type any freeform instruction to auto-tune settings</span>
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={promptText}
+            onChange={(e) => setPromptText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                applyParsedInstruction(promptText);
+              }
+            }}
+            placeholder="e.g. I am a beginner. Teach me Chapter 4 in 20 minutes in Hindi with simple examples."
+            className="flex-1 p-2.5 rounded-lg bg-white border border-border text-xs text-black placeholder-ink-muted focus:outline-none focus:border-primary font-medium"
+          />
+          <button
+            type="button"
+            onClick={() => applyParsedInstruction(promptText)}
+            disabled={isParsing || !promptText.trim()}
+            className="px-4 py-2.5 rounded bg-primary text-white text-xs font-bold hover:bg-primary/90 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+          >
+            {isParsing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5" />
+            )}
+            <span>Auto-Tune</span>
+          </button>
+        </div>
+      </div>
+
       <div className="bg-white rounded-lg p-6 sm:p-8 border border-border space-y-6 shadow-2xs">
+        {/* Target Chapter or Topic if specified */}
+        {targetChapter && (
+          <div className="p-3 rounded bg-blue-50/60 border border-blue-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" />
+              <span className="text-xs font-bold text-black">Targeted Chapter / Section:</span>
+              <span className="text-xs font-mono font-bold text-primary bg-white px-2 py-0.5 rounded border border-border">
+                {targetChapter}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTargetChapter("")}
+              className="text-[11px] text-ink-muted hover:text-black underline cursor-pointer"
+            >
+              Clear chapter filter
+            </button>
+          </div>
+        )}
+
         {/* Knowledge Level */}
         <div>
           <label className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-2 mb-3">
@@ -128,8 +263,26 @@ function SetupForm() {
           </div>
         </div>
 
-        {/* Preferred Learning Style & Language */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t border-border">
+        {/* Teacher Personality, Preferred Style & Language */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-border">
+          {/* Teacher Personality */}
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span>Teacher Personality:</span>
+            </label>
+            <select
+              value={teacherPersonality}
+              onChange={(e) => setTeacherPersonality(e.target.value)}
+              className="w-full p-2.5 rounded bg-white border border-border text-xs text-black focus:outline-none focus:border-primary font-medium"
+            >
+              <option value="socratic">Socratic Guide (Deep Reasoning)</option>
+              <option value="friendly">Friendly Mentor (Encouraging)</option>
+              <option value="strict_coach">Strict Exam Coach (Rigorous)</option>
+              <option value="visual">Visual Architect (Models & Diagrams)</option>
+            </select>
+          </div>
+
           {/* Preferred Style */}
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-2 mb-2">
@@ -194,3 +347,4 @@ export default function SetupPage() {
     </Suspense>
   );
 }
+

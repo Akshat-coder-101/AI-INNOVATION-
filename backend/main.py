@@ -21,7 +21,7 @@ from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import init_db
-from app.api import ingest, lesson, interact, assess, report, profile, learning_path, media, sandbox, health, videos, documents
+from app.api import ingest, lesson, interact, assess, report, profile, learning_path, media, sandbox, health, videos, documents, study_tools
 
 logger = logging.getLogger("sahayak.main")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -92,7 +92,7 @@ app.add_middleware(
 )
 
 # Register API Routers (with /api prefix and root aliases)
-for router_module in [ingest, lesson, interact, assess, report, profile, learning_path, media, sandbox, health, videos, documents]:
+for router_module in [ingest, lesson, interact, assess, report, profile, learning_path, media, sandbox, health, videos, documents, study_tools]:
     app.include_router(router_module.router, prefix=settings.API_PREFIX)
     app.include_router(router_module.router)
 

@@ -8,7 +8,8 @@ from ..models.schemas import (
     InteractionResponse, 
     CheckpointQuestion, 
     LessonSegmentRender, 
-    CaptionItem
+    CaptionItem,
+    TeachingDecisionState
 )
 from .visual_router import VisualRouter
 from .tts import TTSService
@@ -171,11 +172,22 @@ Output JSON schema:
                     db.add(db_attempt)
                     db.commit()
 
+                    decision_state = TeachingDecisionState(
+                        current_concept=concept,
+                        student_understanding="mastery",
+                        confidence=0.92,
+                        action="advance",
+                        reason="Student demonstrated clear conceptual understanding of the principles.",
+                        next_step="next_concept" if segment_id < len(segments) else "final_assessment",
+                        remaining_time_minutes=max(1, (len(segments) - segment_id) * 4)
+                    )
+
                     return InteractionResponse(
                         action="advance",
                         classification="correct",
                         feedback=feedback,
-                        next_segment_id=segment_id + 1 if segment_id < len(segments) else None
+                        next_segment_id=segment_id + 1 if segment_id < len(segments) else None,
+                        decision_state=decision_state
                     )
                 
                 # Misconception path with LLM data
@@ -255,6 +267,16 @@ Output JSON schema:
                 db.add(db_attempt)
                 db.commit()
 
+                decision_state = TeachingDecisionState(
+                    current_concept=concept,
+                    student_understanding="misconception",
+                    confidence=0.78,
+                    action="simplify",
+                    reason=misconception_name,
+                    next_step="explain_with_analogy",
+                    remaining_time_minutes=max(1, (len(segments) - segment_id + 1) * 4)
+                )
+
                 return InteractionResponse(
                     action="reteach",
                     classification="misconception",
@@ -264,7 +286,8 @@ Output JSON schema:
                     new_example=new_example,
                     new_checkpoint_question=new_checkpoint_q,
                     reteach_segment=reteach_segment,
-                    next_segment_id=segment_id
+                    next_segment_id=segment_id,
+                    decision_state=decision_state
                 )
 
             except Exception as e:
@@ -272,14 +295,20 @@ Output JSON schema:
 
         # 3. Rule-Based Fallback (Offline / Demo Mode)
         ans_lower = student_answer.strip().lower()
-        corr_lower = correct_answer.strip().lower()
+        corr_lower = (correct_answer or "").strip().lower()
 
-        is_exact_or_substring = (
-            ans_lower == corr_lower or 
-            (len(ans_lower) > 3 and ans_lower in corr_lower) or 
-            (len(corr_lower) > 3 and corr_lower in ans_lower) or 
-            ans_lower in ["a", "option a", "yes", "correct"]
-        )
+        is_exact_or_substring = False
+        if corr_lower:
+            if ans_lower == corr_lower:
+                is_exact_or_substring = True
+            elif len(ans_lower) >= 4 and ans_lower in corr_lower:
+                is_exact_or_substring = True
+            elif len(corr_lower) >= 4 and corr_lower in ans_lower:
+                is_exact_or_substring = True
+            elif len(ans_lower) <= 2 and corr_lower.startswith(ans_lower):
+                is_exact_or_substring = True
+            elif ans_lower in ["yes", "correct"] and corr_lower in ["yes", "correct", "true"]:
+                is_exact_or_substring = True
 
         if is_exact_or_substring and not trigger_demo_reteach:
             feedback = f"Outstanding work! Your understanding of **{concept}** is spot on. You correctly recognized the underlying principles."
@@ -295,11 +324,22 @@ Output JSON schema:
             db.add(db_attempt)
             db.commit()
 
+            decision_state = TeachingDecisionState(
+                current_concept=concept,
+                student_understanding="mastery",
+                confidence=0.90,
+                action="advance",
+                reason="Student selected the correct grounded definition.",
+                next_step="next_concept" if segment_id < len(segments) else "final_assessment",
+                remaining_time_minutes=max(1, (len(segments) - segment_id) * 4)
+            )
+
             return InteractionResponse(
                 action="advance",
                 classification="correct",
                 feedback=feedback,
-                next_segment_id=segment_id + 1 if segment_id < len(segments) else None
+                next_segment_id=segment_id + 1 if segment_id < len(segments) else None,
+                decision_state=decision_state
             )
 
         # Fallback Reteach with curated analogies bank
@@ -364,6 +404,16 @@ Output JSON schema:
         db.add(db_attempt)
         db.commit()
 
+        decision_state = TeachingDecisionState(
+            current_concept=concept,
+            student_understanding="misconception",
+            confidence=0.75,
+            action="simplify",
+            reason=misconception_name,
+            next_step="explain_with_analogy",
+            remaining_time_minutes=max(1, (len(segments) - segment_id + 1) * 4)
+        )
+
         return InteractionResponse(
             action="reteach",
             classification="misconception",
@@ -373,5 +423,6 @@ Output JSON schema:
             new_example=new_example,
             new_checkpoint_question=new_checkpoint_q,
             reteach_segment=reteach_segment,
-            next_segment_id=segment_id
+            next_segment_id=segment_id,
+            decision_state=decision_state
         )

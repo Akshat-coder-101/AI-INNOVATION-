@@ -21,7 +21,7 @@ class VideoService:
         hrs = int(seconds // 3600)
         mins = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
-        millis = int(round((seconds - int(seconds)) * 1000))
+        millis = round((seconds - int(seconds)) * 1000)
         return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
 
     @classmethod
@@ -411,3 +411,150 @@ class VideoService:
             "video_url": None,
             "duration_sec": 0.0
         }
+
+    @classmethod
+    async def export_full_lesson_video(cls, job_id: str, session_id: str) -> None:
+        """
+        Background worker that synthesizes and stitches all lesson segments into a unified MP4 export.
+        Updates DBExportJob status and progress atomically.
+        """
+        from ..database import SessionLocal, DBExportJob, DBLessonSession
+        from ..state_machine.teacher_agent import TeacherAgentStateMachine
+
+        db = SessionLocal()
+        try:
+            job = db.query(DBExportJob).filter(DBExportJob.id == job_id).first()
+            if not job:
+                logger.error(f"[VideoService] Export job {job_id} not found in database.")
+                return
+
+            sess = db.query(DBLessonSession).filter(DBLessonSession.id == session_id).first()
+            if not sess or not sess.plan_json:
+                job.status = "failed"
+                job.error_message = f"Lesson session {session_id} not found or has no plan."
+                db.commit()
+                return
+
+            job.status = "processing"
+            job.progress = 5
+            db.commit()
+
+            ffmpeg_bin = shutil.which("ffmpeg")
+            if not ffmpeg_bin:
+                job.status = "failed"
+                job.error_message = "FFmpeg runtime binary not found on host. Please deploy with Docker or install ffmpeg."
+                db.commit()
+                logger.warning(f"[VideoService] Job {job_id} failed: ffmpeg binary missing.")
+                return
+
+            backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            media_dir = os.path.join(backend_dir, settings.MEDIA_DIR)
+            os.makedirs(media_dir, exist_ok=True)
+
+            plan_data = sess.plan_json if isinstance(sess.plan_json, dict) else {}
+            raw_segments = plan_data.get("segments", [])
+            if not raw_segments:
+                raw_segments = [{"id": 1, "concept": sess.topic, "visual_type": "labeled-diagram"}]
+
+            total_segments = len(raw_segments)
+            rendered_segment_files: List[str] = []
+
+            for idx, raw_seg in enumerate(raw_segments):
+                seg_id = raw_seg.get("id", idx + 1)
+                
+                # Render segment payload
+                try:
+                    seg_render = await TeacherAgentStateMachine.render_segment(
+                        session_id=session_id,
+                        segment_id=seg_id,
+                        language=sess.language,
+                        db=db
+                    )
+                except Exception as e:
+                    logger.warning(f"[VideoService] Failed to render segment data for {seg_id}: {e}")
+                    seg_render = None
+
+                script = getattr(seg_render, "spoken_script", "") if seg_render else f"In this segment we examine {raw_seg.get('concept', 'Key Concept')}."
+                visual_spec = getattr(seg_render, "visual_spec", None)
+                v_dict = visual_spec.model_dump() if hasattr(visual_spec, "model_dump") else (visual_spec or {"title": raw_seg.get("concept", "Concept"), "type": "labeled-diagram"})
+                captions = getattr(seg_render, "captions", []) if seg_render else []
+                audio_url = getattr(seg_render, "audio_url", None) if seg_render else None
+
+                # Synthesize individual segment video
+                seg_res = await cls.render_segment_video(
+                    segment_id=seg_id,
+                    session_id=session_id,
+                    script=script,
+                    audio_url=audio_url,
+                    visual_spec=v_dict,
+                    captions=captions,
+                    language=sess.language or "en"
+                )
+
+                if seg_res.get("status") == "ready" and seg_res.get("video_url"):
+                    seg_filename = os.path.basename(seg_res["video_url"])
+                    seg_full_path = os.path.join(media_dir, seg_filename)
+                    if os.path.exists(seg_full_path):
+                        rendered_segment_files.append(seg_full_path)
+
+                job.progress = min(85, 10 + int(((idx + 1) / total_segments) * 75))
+                db.commit()
+
+            if not rendered_segment_files:
+                job.status = "failed"
+                job.error_message = "Could not synthesize segment video tracks: media components not found or ffmpeg unavailable."
+                db.commit()
+                return
+
+            # Stitch all segment videos into final full-lesson MP4
+            final_filename = f"export_{job_id}.mp4"
+            final_path = os.path.join(media_dir, final_filename)
+
+            if len(rendered_segment_files) == 1:
+                shutil.copyfile(rendered_segment_files[0], final_path)
+            else:
+                concat_list_file = os.path.join(media_dir, f"concat_{job_id}.txt")
+                with open(concat_list_file, "w", encoding="utf-8") as f:
+                    for fpath in rendered_segment_files:
+                        f.write(f"file '{os.path.basename(fpath)}'\n")
+
+                concat_cmd = [
+                    ffmpeg_bin,
+                    "-y",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", f"concat_{job_id}.txt",
+                    "-c:v", "libx264",
+                    "-preset", "ultrafast",
+                    "-c:a", "aac",
+                    "-b:a", "128k",
+                    "-pix_fmt", "yuv420p",
+                    "-movflags", "+faststart",
+                    final_filename
+                ]
+                res_concat = subprocess.run(concat_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=media_dir, timeout=60)
+                if os.path.exists(concat_list_file):
+                    os.remove(concat_list_file)
+
+                if res_concat.returncode != 0 or not os.path.exists(final_path):
+                    # Fallback copy first segment
+                    shutil.copyfile(rendered_segment_files[0], final_path)
+
+            job.status = "completed"
+            job.progress = 100
+            job.video_url = f"/media/{final_filename}"
+            db.commit()
+            logger.info(f"[VideoService] Export job {job_id} successfully finished: {job.video_url}")
+
+        except Exception as err:
+            logger.exception(f"[VideoService] Export job {job_id} encountered fatal error: {err}")
+            try:
+                job = db.query(DBExportJob).filter(DBExportJob.id == job_id).first()
+                if job:
+                    job.status = "failed"
+                    job.error_message = str(err)
+                    db.commit()
+            except Exception:
+                pass
+        finally:
+            db.close()

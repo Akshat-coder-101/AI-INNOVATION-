@@ -1,10 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models.schemas import Quiz, StudentQuizSubmission, QuizGradeResponse
+from ..models.schemas import Quiz, StudentQuizSubmission, QuizGradeResponse, AssessmentBlueprint
 from ..services.assessment import AssessmentService
 
 router = APIRouter(prefix="/assess", tags=["Assessment & Quiz"])
+
+@router.get("/blueprint/{session_id}", response_model=AssessmentBlueprint)
+def get_assessment_blueprint(
+    session_id: str,
+    db: Session = Depends(get_db)
+):
+    try:
+        blueprint = AssessmentService.create_assessment_blueprint(session_id, db)
+        return blueprint
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Blueprint creation failed: {str(e)}")
 
 @router.post("/quiz/{session_id}", response_model=Quiz)
 async def get_or_generate_quiz(

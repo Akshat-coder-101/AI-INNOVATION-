@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, LessonPlan, LessonSegmentRender } from "@/lib/api";
+import { api, LessonPlan, LessonSegmentRender, ExportJobStatusResponse } from "@/lib/api";
 import TeacherPlayer from "@/components/TeacherPlayer";
 import CourseNavigationSidebar from "@/components/CourseNavigationSidebar";
 import NotesAndResourcesPanel from "@/components/NotesAndResourcesPanel";
@@ -17,7 +17,11 @@ import {
   Check, 
   Bookmark, 
   Sparkles,
-  Award
+  Award,
+  Download,
+  Film,
+  Loader2,
+  X
 } from "lucide-react";
 import Link from "next/link";
 
@@ -37,6 +41,13 @@ export default function LessonPage() {
   // Responsive Drawer states
   const [isNavOpen, setIsNavOpen] = useState<boolean>(false);
   const [isNotesOpen, setIsNotesOpen] = useState<boolean>(false);
+
+  // Video Export Modal & Polling state
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [exportJob, setExportJob] = useState<ExportJobStatusResponse | null>(null);
+  const [isStartingExport, setIsStartingExport] = useState<boolean>(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     async function loadLesson() {
@@ -165,6 +176,54 @@ export default function LessonPage() {
     }
   };
 
+  // Video Export Handler & Polling
+  const handleStartExport = async () => {
+    if (!lessonPlan) return;
+    try {
+      setIsStartingExport(true);
+      setExportError(null);
+      setIsExportModalOpen(true);
+      
+      const jobRes = await api.exportLessonVideo(lessonPlan.session_id);
+      setExportJob({
+        job_id: jobRes.job_id,
+        session_id: jobRes.session_id,
+        status: jobRes.status,
+        progress: jobRes.progress,
+        video_url: jobRes.video_url,
+        error_message: jobRes.error_message
+      });
+
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      
+      pollingRef.current = setInterval(async () => {
+        try {
+          const statusRes = await api.getExportJobStatus(jobRes.job_id);
+          setExportJob(statusRes);
+          if (statusRes.status === "completed" || statusRes.status === "failed") {
+            if (pollingRef.current) {
+              clearInterval(pollingRef.current);
+              pollingRef.current = null;
+            }
+          }
+        } catch (pollErr: any) {
+          console.error("Export poll error:", pollErr);
+        }
+      }, 1500);
+
+    } catch (err: any) {
+      setExportError(err.message || "Failed to start export job");
+    } finally {
+      setIsStartingExport(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
   const currentSegmentMeta = lessonPlan.segments.find((s) => s.id === currentSegmentId);
   const isMastered = completedSegmentIds.includes(currentSegmentId);
 
@@ -205,8 +264,23 @@ export default function LessonPage() {
           </div>
         </div>
 
-        {/* Right: Notes Toggle & Actions */}
+        {/* Right: Actions & Export */}
         <div className="flex items-center gap-2">
+          {/* Export Lesson MP4 button */}
+          <button
+            onClick={handleStartExport}
+            disabled={isStartingExport}
+            className="px-3 py-1.5 rounded bg-slate-900 text-white hover:bg-black transition-colors text-xs flex items-center gap-1.5 font-medium shadow-xs disabled:opacity-50"
+            title="Export full lesson as MP4 video"
+          >
+            {isStartingExport ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Film className="w-3.5 h-3.5 text-sky-400" />
+            )}
+            <span className="hidden sm:inline">Export MP4</span>
+          </button>
+
           <button
             onClick={() => setIsBookmarked(!isBookmarked)}
             className={`px-3 py-1.5 rounded border transition-colors text-xs flex items-center gap-1.5 ${
@@ -334,6 +408,105 @@ export default function LessonPage() {
           onToggleBookmark={() => setIsBookmarked(!isBookmarked)}
         />
       </div>
+
+      {/* 5. Video Export Modal */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-xl shadow-2xl border border-border w-full max-w-md p-6 relative space-y-5">
+            {/* Close Button */}
+            <button
+              onClick={() => setIsExportModalOpen(false)}
+              className="absolute right-4 top-4 p-1.5 rounded-lg text-ink-muted hover:text-ink-primary hover:bg-canvas-elevated transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-sky-50 text-sky-600 border border-sky-100">
+                <Film className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-ink-primary">Export Lesson MP4</h3>
+                <p className="text-xs text-ink-muted">Synthesizing full multi-segment lesson video</p>
+              </div>
+            </div>
+
+            {/* Content State */}
+            {exportError ? (
+              <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Export Failed</p>
+                  <p className="mt-0.5 text-red-600">{exportError}</p>
+                </div>
+              </div>
+            ) : exportJob?.status === "completed" ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-center space-y-2">
+                  <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                    <Check className="w-5 h-5" />
+                  </div>
+                  <p className="text-sm font-bold text-emerald-900">Lesson Video Ready!</p>
+                  <p className="text-xs text-emerald-700">
+                    Full audio speech, progressive visual reveal, and burned-in subtitles stitched.
+                  </p>
+                </div>
+
+                <a
+                  href={api.getExportDownloadUrl(exportJob.job_id)}
+                  download
+                  className="w-full py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download MP4 Video</span>
+                </a>
+              </div>
+            ) : exportJob?.status === "failed" ? (
+              <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
+                <p className="font-bold flex items-center gap-1.5 text-amber-900">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  Rendering Diagnostic
+                </p>
+                <p>{exportJob.error_message || "Video rendering could not be completed."}</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Progress bar */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-ink-primary flex items-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                      {exportJob?.status === "queued" ? "Queued in background..." : "Rendering lesson scenes..."}
+                    </span>
+                    <span className="font-bold font-mono text-primary">{exportJob?.progress || 5}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300 rounded-full"
+                      style={{ width: `${Math.max(5, exportJob?.progress || 5)}%` }}
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-ink-muted text-center">
+                  Generating progressive blackboard scenes, synchronized audio, and stitching timeline tracks.
+                </p>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex justify-end pt-2 border-t border-border">
+              <button
+                onClick={() => setIsExportModalOpen(false)}
+                className="px-3.5 py-1.5 rounded-lg border border-border text-xs text-ink-secondary hover:text-ink-primary hover:bg-canvas-elevated font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

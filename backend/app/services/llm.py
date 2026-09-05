@@ -64,7 +64,7 @@ class LLMService:
                 },
                 json={
                     "model": settings.GROQ_MODEL,
-                    "max_tokens": 800,
+                    "max_tokens": 4096,
                     "temperature": temperature,
                     "messages": [
                         {"role": "system", "content": system_prompt or "You are an expert AI teacher."},
@@ -209,7 +209,7 @@ class LLMService:
                             },
                             json={
                                 "model": settings.GROQ_MODEL,
-                                "max_tokens": 800,
+                                "max_tokens": 4096,
                                 "temperature": temperature,
                                 "stream": True,
                                 "messages": [
