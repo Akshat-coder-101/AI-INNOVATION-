@@ -112,6 +112,17 @@ class DBYouTubeCache(Base):
     payload: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=get_utc_now)
 
+class DBExportJob(Base):
+    __tablename__ = "export_jobs"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    session_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="queued") # queued, processing, completed, failed
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    video_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=get_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
 # Engine initialization
 engine = create_engine(
     settings.DATABASE_URL,

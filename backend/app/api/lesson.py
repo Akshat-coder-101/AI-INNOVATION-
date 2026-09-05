@@ -1,17 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
-from fastapi.responses import StreamingResponse
+import os
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, BackgroundTasks
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
-from ..database import get_db, DBLessonSession
+from ..config import settings
+from ..database import get_db, DBLessonSession, DBExportJob
 from ..models.schemas import (
     LessonPlan, 
     LessonPlanRequest, 
     LessonSegmentRender, 
-    LanguageSwitchRequest
+    LanguageSwitchRequest,
+    ExportJobResponse,
+    ExportJobStatusResponse
 )
 from ..state_machine.teacher_agent import TeacherAgentStateMachine
 from ..services.llm import LLMService
+from ..services.video import VideoService
 
 router = APIRouter(prefix="/lesson", tags=["Lesson Planning & Rendering"])
 
@@ -27,10 +33,12 @@ async def create_lesson_plan(
     try:
         plan = await TeacherAgentStateMachine.generate_lesson_plan(
             topic=req.topic,
-            material_id=req.material_id,
+            material_id=req.material_id or req.document_id,
             profile=req.learner_profile,
             time_budget_minutes=req.time_budget_minutes or 20,
             language=req.language or "en",
+            instruction=req.instruction,
+            target_chapter=req.target_chapter,
             db=db
         )
         return plan
@@ -157,3 +165,96 @@ async def stream_segment_explanation(
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.post("/{session_id}/export", response_model=ExportJobResponse)
+async def export_lesson_video(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Spawns an asynchronous rendering job to stitch all lesson segments into an MP4 export.
+    Returns the job_id immediately so frontend can monitor progress without blocking.
+    """
+    sess = db.query(DBLessonSession).filter(DBLessonSession.id == session_id).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Lesson session not found")
+
+    job_id = str(uuid.uuid4())
+    job = DBExportJob(
+        id=job_id,
+        session_id=session_id,
+        status="queued",
+        progress=0
+    )
+    db.add(job)
+    db.commit()
+
+    # Enqueue background export task
+    background_tasks.add_task(VideoService.export_full_lesson_video, job_id=job_id, session_id=session_id)
+
+    return ExportJobResponse(
+        job_id=job_id,
+        session_id=session_id,
+        status="queued",
+        progress=0
+    )
+
+
+@router.get("/export/{job_id}/status", response_model=ExportJobStatusResponse)
+def get_export_job_status(
+    job_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Returns current rendering progress and status for an export job.
+    """
+    job = db.query(DBExportJob).filter(DBExportJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Export job not found")
+
+    return ExportJobStatusResponse(
+        job_id=job.id,
+        session_id=job.session_id,
+        status=job.status,
+        progress=job.progress,
+        video_url=job.video_url,
+        error_message=job.error_message,
+        created_at=job.created_at,
+        updated_at=job.updated_at
+    )
+
+
+@router.get("/export/{job_id}/download")
+def download_exported_lesson_video(
+    job_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Serves the completed exported lesson MP4 file with attachment download headers.
+    """
+    job = db.query(DBExportJob).filter(DBExportJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Export job not found")
+
+    if job.status != "completed" or not job.video_url:
+        raise HTTPException(status_code=400, detail=f"Export job is in status '{job.status}'; video is not ready.")
+
+    backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    filename = os.path.basename(job.video_url)
+    file_path = os.path.join(backend_dir, settings.MEDIA_DIR, filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Exported video file not found on disk")
+
+    sess = db.query(DBLessonSession).filter(DBLessonSession.id == job.session_id).first()
+    safe_topic = (sess.topic if sess else "lesson").replace(" ", "_").replace("/", "_")[:30]
+    download_name = f"Sahayak_Lesson_{safe_topic}.mp4"
+
+    return FileResponse(
+        path=file_path,
+        media_type="video/mp4",
+        filename=download_name
+    )
+

@@ -38,15 +38,15 @@ class CodeSandboxService:
                 "stdout": stdout,
                 "stderr": stderr,
                 "returncode": returncode,
-                "output": stdout if success else f"Error (exit {returncode}):\n{stderr}"
+                "output": stdout if success else (stderr or "Execution failed")
             }
         except subprocess.TimeoutExpired:
             return {
                 "success": False,
                 "stdout": "",
-                "stderr": "Execution timed out (5s limit exceeded)",
+                "stderr": f"Execution timed out after {timeout_seconds} seconds.",
                 "returncode": -1,
-                "output": "Execution timed out (5s limit exceeded)"
+                "output": f"Execution timed out after {timeout_seconds} seconds."
             }
         except Exception as e:
             return {
@@ -54,5 +54,9 @@ class CodeSandboxService:
                 "stdout": "",
                 "stderr": str(e),
                 "returncode": -1,
-                "output": f"Sandbox execution failure: {str(e)}"
+                "output": f"Execution error: {str(e)}"
             }
+
+    @staticmethod
+    def run_python_code(code: str, timeout_seconds: int = 5) -> Dict[str, Any]:
+        return CodeSandboxService.execute_python_code(code, timeout_seconds)
