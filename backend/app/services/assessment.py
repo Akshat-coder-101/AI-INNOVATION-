@@ -679,7 +679,7 @@ JSON response:
         # Overall Score
         has_attempts = latest_attempt is not None or len(ck_attempts) > 0
         if latest_attempt and latest_attempt.score_percentage is not None:
-            score_pct = float(latest_attempt.score_percentage)
+            score_pct = latest_attempt.score_percentage
         elif len(ck_attempts) > 0:
             correct_cks = sum(1 for c in ck_attempts if c.classification == "correct")
             score_pct = round((correct_cks / len(ck_attempts)) * 100, 1)
