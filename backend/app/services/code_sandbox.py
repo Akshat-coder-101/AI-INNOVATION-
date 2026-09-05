@@ -14,15 +14,19 @@ class CodeSandboxService:
         Executes Python code in a safe isolated subprocess and captures standard output and errors.
         """
         try:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp_file:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as tmp_file:
                 tmp_file.write(code)
                 tmp_file_path = tmp_file.name
 
             try:
+                env = os.environ.copy()
+                env["PYTHONIOENCODING"] = "utf-8"
                 res = subprocess.run(
                     [sys.executable, tmp_file_path],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    env=env,
                     timeout=timeout_seconds
                 )
                 stdout = res.stdout
