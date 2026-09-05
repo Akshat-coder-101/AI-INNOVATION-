@@ -83,6 +83,12 @@ export default function LessonPage() {
     }
   }, [sessionId]);
 
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
   // Handle switching to a specific segment from syllabus
   const handleSelectSegment = async (segId: number) => {
     if (!lessonPlan || segId === currentSegmentId) return;
@@ -129,37 +135,6 @@ export default function LessonPage() {
       handleSelectSegment(currentSegmentId + 1);
     }
   };
-
-  if (isLoading && !currentSegment) {
-    return (
-      <div className="py-24 text-center space-y-4">
-        <div className="w-14 h-14 rounded bg-[#E9F1FC] text-primary flex items-center justify-center mx-auto animate-pulse">
-          <BrainCircuit className="w-7 h-7 animate-spin" />
-        </div>
-        <h2 className="text-lg font-bold text-ink-primary">Loading Adaptive Classroom...</h2>
-        <p className="text-xs text-ink-muted max-w-sm mx-auto">
-          Preparing curriculum syllabus, visual specs, and interactive checkpoints.
-        </p>
-      </div>
-    );
-  }
-
-  if (error || !lessonPlan || !currentSegment) {
-    return (
-      <div className="py-20 max-w-lg mx-auto text-center space-y-4">
-        <AlertCircle className="w-10 h-10 text-[#C21E1E] mx-auto" />
-        <h2 className="text-lg font-bold text-ink-primary">Lesson Loading Error</h2>
-        <p className="text-xs text-ink-secondary">{error || "Unable to load lesson session."}</p>
-        <Link
-          href="/topic"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded bg-black text-white font-bold text-xs"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Return to Topic Selection</span>
-        </Link>
-      </div>
-    );
-  }
 
   const handleRequestSimplerExplanation = async () => {
     if (!lessonPlan) return;
@@ -218,11 +193,36 @@ export default function LessonPage() {
     }
   };
 
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, []);
+  if (isLoading && !currentSegment) {
+    return (
+      <div className="py-24 text-center space-y-4">
+        <div className="w-14 h-14 rounded bg-[#E9F1FC] text-primary flex items-center justify-center mx-auto animate-pulse">
+          <BrainCircuit className="w-7 h-7 animate-spin" />
+        </div>
+        <h2 className="text-lg font-bold text-ink-primary">Loading Adaptive Classroom...</h2>
+        <p className="text-xs text-ink-muted max-w-sm mx-auto">
+          Preparing curriculum syllabus, visual specs, and interactive checkpoints.
+        </p>
+      </div>
+    );
+  }
+
+  if (error || !lessonPlan || !currentSegment) {
+    return (
+      <div className="py-20 max-w-lg mx-auto text-center space-y-4">
+        <AlertCircle className="w-10 h-10 text-[#C21E1E] mx-auto" />
+        <h2 className="text-lg font-bold text-ink-primary">Lesson Loading Error</h2>
+        <p className="text-xs text-ink-secondary">{error || "Unable to load lesson session."}</p>
+        <Link
+          href="/topic"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded bg-black text-white font-bold text-xs"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Return to Topic Selection</span>
+        </Link>
+      </div>
+    );
+  }
 
   const currentSegmentMeta = lessonPlan.segments.find((s) => s.id === currentSegmentId);
   const isMastered = completedSegmentIds.includes(currentSegmentId);
