@@ -23,6 +23,7 @@
 14. [Setup Instructions](#14-setup-instructions)
 15. [Deployment Instructions](#15-deployment-instructions)
 16. [Known Limitations](#16-known-limitations)
+17. [Hackathon Demo Video Script & Walkthrough (3–7 Minutes)](#17-hackathon-demo-video-script--walkthrough-37-minutes)
 
 ---
 
@@ -49,6 +50,8 @@ A learner picks a topic (or uploads a PDF/DOCX/PPTX) and states an instruction i
 3. **Questions & evaluates** — poses checkpoint questions, classifies the answer (correct / partial / **misconception**), and gives targeted feedback.
 4. **Adapts** — on a misconception it re‑teaches with a **fresh analogy** and a different visual, then re‑checks.
 5. **Assesses & reports** — runs a formal quiz (MCQ + open‑ended, LLM‑graded against a rubric with partial credit) and produces a **learning report** with concept‑level mastery and next steps, feeding a persistent **learner profile** and a **learning‑path DAG**.
+6. **Closes the loop** — mastery results and resolved misconceptions feed directly back into future planning:
+   $$\text{Upload/Topic} \longrightarrow \text{Planning} \longrightarrow \text{Video Teaching} \longrightarrow \text{Interaction} \longrightarrow \text{Adaptive Reteach} \longrightarrow \text{Assessment} \longrightarrow \text{Learner Profile Update} \longrightarrow \text{Next Lesson}$$
 
 The system is **provider‑resilient**: every AI capability has a graceful fallback, so the app runs end‑to‑end even with no API keys (using deterministic embeddings and local rendering), and upgrades automatically as keys are added.
 
@@ -362,6 +365,83 @@ Set `NEXT_PUBLIC_API_BASE_URL` to the public backend URL and add that origin to 
 - **No server‑side authentication.** The login page is a client‑side gate; API endpoints are open. Add auth (and rate limiting) before public deployment.
 - **Regional‑language depth varies.** English/Hindi/Hinglish are tuned with dedicated prompt clauses; Tamil/Telugu/Bengali/Spanish rely on generic LLM language instruction and are less specialized.
 - **API costs & quotas.** Cloud providers (Gemini, ElevenLabs, Deepgram, YouTube, avatar vendors) have rate limits and costs; the YouTube cache and provider fallbacks mitigate but don't eliminate this.
+
+---
+
+## 17. Hackathon Demo Video Script & Walkthrough (3–7 Minutes)
+
+> **Format:** Split-column script with exact timing, on-screen actions, and word-for-word spoken narration.
+> **Total Length:** ~5 minutes (within the 3–7 minute requirement).
+
+### Timing Breakdown
+
+| Segment | Timing | Topic | Key Deliverable Shown |
+|---|---|---|---|
+| **1. Hook & Problem** | `0:00 – 0:45` | The flaw with AI chatbots in education | Home Page / Mission statement |
+| **2. Document Ingestion & RAG** | `0:45 – 1:30` | Uploading material & planning | Upload flow, chunking, citation generation |
+| **3. Theater-Mode Lesson & Video** | `1:30 – 2:30` | Multimodal teaching experience | 16:9 stage, audio narration, subtitles, visual router |
+| **4. Checkpoint & The Adaptive Loop** | `2:30 – 3:30` | Catching misconceptions & re-teaching | Voice/text answer, misconception diagnosis, fresh analogy |
+| **5. Multilingual & Study Tools** | `3:30 – 4:15` | Mid-lesson Hindi switch & study tools | Mid-lesson language toggle, flashcards/quiz |
+| **6. Learning Report & Closing** | `4:15 – 5:00` | Profile DAG & Architectural resilience | Learning Path DAG, summary, call to action |
+
+---
+
+### Scene-by-Scene Script
+
+#### Scene 1: The Problem & The Vision (0:00 – 0:45)
+* **What to Show on Screen:**
+  - Start on the Sahayak Landing Page (`http://localhost:3000`).
+  - Scroll smoothly down past the hero banner showing the tagline: *"An adaptive, document-grounded AI teacher that teaches through video, voice, and visuals."*
+  - Briefly contrast with standard AI chatbots dumping walls of text.
+* **What to Say (Narration):**
+  > "Most AI education tools today are just thin wrappers around a chatbot. They dump walls of text into a chat box. But real teaching isn't text retrieval. A real human educator diagnoses what a student knows, plans a progression, explains out loud, draws on a board, pauses to check understanding, catches misconceptions, and reteaches with fresh analogies. Welcome to Sahayak AI Teacher — an end-to-end autonomous educator driven by an explicit 10-state cognitive engine that teaches through video, voice, and adaptive visuals, grounded directly in your textbooks."
+
+#### Scene 2: Grounded Ingestion & Personalized Planning (0:45 – 1:30)
+* **What to Show on Screen:**
+  - Click **"Start Learning"** or navigate to `/upload`.
+  - Drag and drop a sample PDF (e.g., `photosynthesis_chapter.pdf`).
+  - Enter the prompt: *"Teach me this chapter in 15 minutes, focus on intuitive examples."*
+  - Show the ingestion pipeline: parsing pages, 250-word chunking, 768-dim embeddings, and hybrid retrieval.
+  - Show the generated structured syllabus with segment breakdown and citation chips (`[Ch. 3, Page 12]`).
+* **What to Say (Narration):**
+  > "Let's upload a textbook chapter. Instead of hallucinating general knowledge, Sahayak's ingestion pipeline extracts text, retains chapter and page metadata, and embeds passages into 768-dimensional vectors. Our hybrid retrieval engine combines cosine similarity with lexical keyword overlap to ensure zero source degradation. Based on our time budget and learner profile, the Teacher Agent plans a structured, multi-segment lesson with verified source citations, ensuring strict academic grounding."
+
+#### Scene 3: Multimodal Theater-Mode Player (1:30 – 2:30)
+* **What to Show on Screen:**
+  - Enter the **Theater Mode Player** (`/lesson/...`).
+  - Show the 16:9 stage: dynamic slide with Ken Burns motion, rendered charts/diagrams, burned-in subtitles, and the audio-reactive canvas avatar pulsing to speech.
+  - Hover over a **Citation Chip** to reveal the source snippet and confidence score modal.
+* **What to Say (Narration):**
+  > "Here is our Theater Player. Notice that this is not a static text screen or a generic avatar reading a script. Sahayak synthesizes a synchronized video locally using ffmpeg, Pillow, and neural TTS. It dynamically renders subject-specific visuals: mathematical equations via KaTeX, data plots with Recharts, interactive Python sandboxes for programming, or diagrams for biology. In the corner, our audio-reactive avatar syncs in real time to the voice narration, while students can inspect verbatim citations at any moment."
+
+#### Scene 4: Checkpoint & Adaptive Re-teaching (2:30 – 3:30)
+* **What to Show on Screen:**
+  - Segment 1 concludes; the player enters the **QUESTION** state.
+  - Checkpoint question appears: *"Why do plants appear green?"*
+  - Click the **Microphone** icon (Deepgram STT) or type a deliberate common misconception: *"Because chlorophyll absorbs green light."*
+  - Submit answer and show the **Misconception Modal**:
+    - Status: `Misconception Detected`
+    - Diagnosis: *"Confusing absorption with reflection."*
+    - Transition to **ADAPT** state with a brand new analogy and alternate visual representation.
+* **What to Say (Narration):**
+  > "This is where Sahayak truly mirrors a master teacher: the closed adaptive loop. After each segment, the agent pauses with a checkpoint question. I'll provide a very common student misconception: 'Plants are green because they absorb green light.' Watch the Evaluator in action: instead of a generic 'Wrong, try again', it semantically diagnoses the exact cognitive error: confusing absorption with reflection. Instantly, the agent branches into the ADAPT state. It injects an adaptive reteach segment with a fresh analogy and alternate visual so the student actually builds intuition."
+
+#### Scene 5: Multilingual Switch & Study Tools (3:30 – 4:15)
+* **What to Show on Screen:**
+  - In player controls, toggle language from **English** to **Hindi** (or Hinglish).
+  - Show player immediately updating: narration voice switches to natural Hindi/Hinglish, Devanagari subtitles appear, technical terms remain clear in English.
+  - Briefly show the **Study Tools** tab: flashcards, notes, and quiz.
+* **What to Say (Narration):**
+  > "India has hundreds of millions of learners whose primary learning language is not English. Sahayak natively supports mid-lesson multilingual switching between English, Hindi, and Hinglish. When we toggle to Hindi, the agent preserves core technical terminology while re-synthesizing natural conversational explanations and Devanagari subtitles. Alongside video lessons, Sahayak automatically creates interactive study tools: flashcards, downloadable summaries, and rubric-graded quizzes."
+
+#### Scene 6: Assessment, Learner Profile DAG & Architecture (4:15 – 5:00)
+* **What to Show on Screen:**
+  - Navigate to **Learning Path Dashboard** (`/learning-path` and `/report`).
+  - Show the **Prerequisite DAG**: nodes showing *Mastered*, *Developing*, and *Misconceptions Remedied*.
+  - Show the backend architecture resilience: multi-LLM failover (Gemini → Groq → Anthropic) and offline fallbacks.
+  - Conclude on the Sahayak title card.
+* **What to Say (Narration):**
+  > "Finally, the session concludes with a formal rubric-graded assessment. The results feed straight back into the student's persistent Learner Profile DAG. The misconceptions we resolved today are recorded so future lessons never repeat past confusion. Architecturally, Sahayak is built with full provider resilience: multi-LLM failover across Gemini, Groq, and Anthropic, with zero-cost offline fallbacks for embeddings and local ffmpeg video rendering. Sahayak AI Teacher transforms passive video watching into active, personalized, human-like mastery. Thank you!"
 
 ---
 

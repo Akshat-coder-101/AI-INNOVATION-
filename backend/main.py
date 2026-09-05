@@ -144,7 +144,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         500: "internal_error",
     }
     code = code_map.get(exc.status_code, "http_error")
-    message = str(exc.detail) if exc.detail else "An HTTP error occurred."
+    message = exc.detail if exc.detail else "An HTTP error occurred."
     return make_canonical_error(
         code=code,
         message=message,
